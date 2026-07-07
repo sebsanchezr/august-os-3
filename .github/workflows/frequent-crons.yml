@@ -1,0 +1,30 @@
+name: Frequent crons (Vercel Hobby can't schedule these)
+
+on:
+  schedule:
+    # Approvals -> Discord notifier, every 5 minutes
+    - cron: '*/5 * * * *'
+    # Meeting prep-pack generator, every 30 minutes, 06:00-21:59 UTC
+    - cron: '*/30 6-21 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  report-approvals:
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '*/5 * * * *' || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Ping report-approvals cron endpoint
+        run: |
+          curl -sS -o /dev/null -w "%{http_code}\n" -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://augustosv3.vercel.app/api/cron/report-approvals"
+
+  meeting-prep:
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '*/30 6-21 * * *' || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Ping meeting-prep cron endpoint
+        run: |
+          curl -sS -o /dev/null -w "%{http_code}\n" -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://augustosv3.vercel.app/api/cron/meeting-prep"

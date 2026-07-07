@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServer } from '@/lib/supabase-server'
+import { createSupabaseAdmin } from '@/lib/supabase-server'
 
 export async function GET(req: NextRequest) {
-  const supabase = createSupabaseServer()
+  const supabase = createSupabaseAdmin()
   const status = req.nextUrl.searchParams.get('status')
   const source = req.nextUrl.searchParams.get('source')
   const campaign = req.nextUrl.searchParams.get('campaign')

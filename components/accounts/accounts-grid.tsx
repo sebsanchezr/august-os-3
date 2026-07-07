@@ -1,0 +1,243 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import { Loader2, Plus, Circle, TrendingUp, AlertTriangle, Users, Calendar, CheckSquare, Trash2 } from 'lucide-react'
+import { fetchAccounts, deleteAccount, type AccountListItem } from '@/lib/accounts-client'
+
+const HEALTH_COLOUR: Record<string, string> = {
+  red:   'text-red-400',
+  amber: 'text-amber-400',
+  green: 'text-emerald-400',
+}
+
+const HEALTH_BG: Record<string, string> = {
+  red:   'border-red-900/40 bg-red-950/20',
+  amber: 'border-amber-900/40 bg-amber-950/10',
+  green: 'border-[#1c2035] bg-[#0e1017]',
+}
+
+const HEALTH_SORT: Record<string, number> = { red: 0, amber: 1, green: 2 }
+
+function fmt(n: number | null | undefined, currency = 'GBP'): string {
+  if (n == null) return '--'
+  return new Intl.NumberFormat('en-GB', { style: 'currency', currency, minimumFractionDigits: 0 }).format(n)
+}
+
+function relativeDate(iso: string | null | undefined): string {
+  if (!iso) return 'never'
+  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000)
+  if (diff === 0) return 'today'
+  if (diff === 1) return 'yesterday'
+  return `${diff}d ago`
+}
+
+function nextMeetingLabel(m: AccountListItem['next_meeting']): string {
+  if (!m) return 'none scheduled'
+  const d = new Date(m.scheduled_at)
+  return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+}
+
+export default function AccountsGrid() {
+  const [accounts, setAccounts] = useState<AccountListItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [healthFilter, setHealthFilter] = useState<'all' | 'red' | 'amber' | 'green'>('all')
+
+  useEffect(() => {
+    fetchAccounts()
+      .then((data) => {
+        const sorted = [...data].sort((a, b) => {
+          const h = (HEALTH_SORT[a.health] ?? 2) - (HEALTH_SORT[b.health] ?? 2)
+          if (h !== 0) return h
+          return a.name.localeCompare(b.name)
+        })
+        setAccounts(sorted)
+      })
+      .catch((e: Error) => setError(e.message))
+      .finally(() => setLoading(false))
+  }, [])
+
+  const displayed = healthFilter === 'all'
+    ? accounts
+    : accounts.filter((a) => a.health === healthFilter)
+
+  const counts = {
+    red:   accounts.filter((a) => a.health === 'red').length,
+    amber: accounts.filter((a) => a.health === 'amber').length,
+    green: accounts.filter((a) => a.health === 'green').length,
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="animate-spin text-[#636780]" size={20} />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="p-6 text-red-400 text-sm">
+        Failed to load accounts: {error}
+      </div>
+    )
+  }
+
+  return (
+    <div className="p-6">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h1 className="text-[#e4e6f0] font-semibold text-lg">Accounts</h1>
+          <p className="text-[#636780] text-xs mt-0.5">{accounts.length} active clients</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/accounts/approvals"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-indigo-600 hover:bg-indigo-500 text-white transition-colors"
+          >
+            <CheckSquare size={12} />
+            Approvals
+          </Link>
+          <Link
+            href="/accounts/issues"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-[#181b27] hover:bg-[#1c2035] text-[#e4e6f0] border border-[#1c2035] transition-colors"
+          >
+            <AlertTriangle size={12} />
+            Issues
+          </Link>
+          <button
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-[#181b27] hover:bg-[#1c2035] text-[#e4e6f0] border border-[#1c2035] transition-colors"
+            onClick={() => { /* TODO: new account modal */ }}
+          >
+            <Plus size={12} />
+            New client
+          </button>
+        </div>
+      </div>
+
+      {/* Health summary bar */}
+      <div className="flex items-center gap-3 mb-5">
+        {(['all', 'red', 'amber', 'green'] as const).map((h) => {
+          const count = h === 'all' ? accounts.length : counts[h]
+          const active = healthFilter === h
+          return (
+            <button
+              key={h}
+              onClick={() => setHealthFilter(h)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border transition-colors ${
+                active
+                  ? 'bg-[#181b27] border-[#3d4060] text-[#e4e6f0]'
+                  : 'border-transparent text-[#636780] hover:text-[#e4e6f0]'
+              }`}
+            >
+              {h !== 'all' && (
+                <Circle
+                  size={8}
+                  className={`fill-current ${HEALTH_COLOUR[h]}`}
+                />
+              )}
+              {h === 'all' ? 'All' : h.charAt(0).toUpperCase() + h.slice(1)}
+              <span className="ml-1 text-[#3d4060]">{count}</span>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+        {displayed.map((account) => (
+          <Link
+            key={account.id}
+            href={`/accounts/${account.id}`}
+            className={`block rounded-xl border p-4 transition-all hover:border-[#3d4060] ${HEALTH_BG[account.health] ?? HEALTH_BG.green}`}
+          >
+            {/* Name + health */}
+            <div className="flex items-start justify-between mb-3">
+              <div>
+                <p className="text-[#e4e6f0] font-medium text-sm">{account.name}</p>
+                {account.am && (
+                  <p className="text-[#636780] text-xs mt-0.5 flex items-center gap-1">
+                    <Users size={10} />
+                    {(account.am as { name: string }).name}
+                  </p>
+                )}
+              </div>
+              <Circle
+                size={10}
+                className={`fill-current shrink-0 mt-1 ${HEALTH_COLOUR[account.health] ?? HEALTH_COLOUR.green}`}
+              />
+            </div>
+
+            {/* MRR */}
+            {account.mrr != null && (
+              <p className="text-[#e4e6f0] text-sm font-semibold mb-3">
+                {fmt(account.mrr, account.currency)}<span className="text-[#636780] text-xs font-normal">/mo</span>
+              </p>
+            )}
+
+            {/* 7d metrics */}
+            {account.metrics_7d && (
+              <div className="grid grid-cols-3 gap-2 mb-3">
+                <Metric label="7d Spend" value={fmt(account.metrics_7d.spend, account.currency)} />
+                <Metric label="7d Revenue" value={fmt(account.metrics_7d.revenue, account.currency)} />
+                <Metric
+                  label="Avg ROAS"
+                  value={account.metrics_7d.roas_avg != null ? `${account.metrics_7d.roas_avg.toFixed(2)}x` : '--'}
+                  highlight={
+                    account.target_roas != null && account.metrics_7d.roas_avg != null
+                      ? account.metrics_7d.roas_avg < account.target_roas * 0.7
+                        ? 'red'
+                        : account.metrics_7d.roas_avg < account.target_roas * 0.95
+                        ? 'amber'
+                        : 'green'
+                      : undefined
+                  }
+                />
+              </div>
+            )}
+
+            {/* Footer: contact recency, tasks, meeting */}
+            <div className="flex items-center justify-between text-[10px] text-[#636780] pt-2 border-t border-[#1c2035]">
+              <span>Contact {relativeDate(account.last_client_contact)}</span>
+              <span className="flex items-center gap-2">
+                {account.open_task_count > 0 && (
+                  <span className="flex items-center gap-0.5">
+                    <TrendingUp size={9} /> {account.open_task_count}t
+                  </span>
+                )}
+                {account.open_issue_count > 0 && (
+                  <span className="flex items-center gap-0.5 text-amber-400">
+                    <AlertTriangle size={9} /> {account.open_issue_count}i
+                  </span>
+                )}
+                <span className="flex items-center gap-0.5">
+                  <Calendar size={9} /> {nextMeetingLabel(account.next_meeting)}
+                </span>
+              </span>
+            </div>
+          </Link>
+        ))}
+      </div>
+
+      {displayed.length === 0 && (
+        <div className="text-center text-[#636780] text-sm py-16">
+          No {healthFilter !== 'all' ? healthFilter + ' ' : ''}accounts found.
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Metric({ label, value, highlight }: { label: string; value: string; highlight?: 'red' | 'amber' | 'green' }) {
+  const colour = highlight
+    ? { red: 'text-red-400', amber: 'text-amber-400', green: 'text-emerald-400' }[highlight]
+    : 'text-[#e4e6f0]'
+  return (
+    <div>
+      <p className="text-[9px] text-[#636780] uppercase tracking-wide">{label}</p>
+      <p className={`text-xs font-medium ${colour}`}>{value}</p>
+    </div>
+  )
+}

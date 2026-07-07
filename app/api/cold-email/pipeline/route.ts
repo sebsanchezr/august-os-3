@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServer } from '@/lib/supabase-server'
+import { createSupabaseAdmin } from '@/lib/supabase-server'
 
 const VALID_STAGES = [
   'new_reply', 'qualified', 'creatives_in_production', 'creatives_delivered',
@@ -9,7 +9,7 @@ const VALID_STAGES = [
 type Stage = typeof VALID_STAGES[number]
 
 export async function GET() {
-  const supabase = createSupabaseServer()
+  const supabase = createSupabaseAdmin()
 
   const { data, error } = await supabase
     .from('ce_pipeline')
@@ -21,7 +21,7 @@ export async function GET() {
 }
 
 export async function PATCH(req: NextRequest) {
-  const supabase = createSupabaseServer()
+  const supabase = createSupabaseAdmin()
   let body: { id: string; stage: Stage }
   try { body = await req.json() } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }) }
 

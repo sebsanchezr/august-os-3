@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServer } from '@/lib/supabase-server'
+import { createSupabaseAdmin } from '@/lib/supabase-server'
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
-  const supabase = createSupabaseServer()
+  const supabase = createSupabaseAdmin()
 
   const [leadRes, eventsRes, pipelineRes] = await Promise.all([
     supabase.from('ce_leads').select('*').eq('id', params.id).single(),

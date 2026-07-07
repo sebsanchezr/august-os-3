@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServer } from '@/lib/supabase-server'
+import { createSupabaseAdmin } from '@/lib/supabase-server'
 
 type Window = 'yesterday' | '7d' | '30d'
 
@@ -25,7 +25,7 @@ function getDateRange(win: Window): { start: string; days: number } {
 
 export async function GET(req: NextRequest) {
   const win = (req.nextUrl.searchParams.get('window') ?? '7d') as Window
-  const supabase = createSupabaseServer()
+  const supabase = createSupabaseAdmin()
 
   const { start } = getDateRange(win)
 
