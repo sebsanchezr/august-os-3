@@ -4,9 +4,9 @@
     { "path": "/api/cron/invoice-reminders", "schedule": "0 8 * * *" },
     { "path": "/api/cron/upwork-search", "schedule": "0 9 * * 1-5" },
     { "path": "/api/cron/calendar-sync", "schedule": "0 6 * * 1" },
-    { "path": "/api/cron/meeting-prep", "schedule": "*/30 * * * *" },
-    { "path": "/api/cron/meeting-followup", "schedule": "*/30 * * * *" },
-    { "path": "/api/cron/report-approvals", "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/meeting-prep", "schedule": "0 7 * * *" },
+    { "path": "/api/cron/meeting-followup", "schedule": "0 20 * * *" },
+    { "path": "/api/cron/report-approvals", "schedule": "0 9 * * *" },
     { "path": "/api/cron/metrics-staleness", "schedule": "0 10 * * *" }
   ]
 }
