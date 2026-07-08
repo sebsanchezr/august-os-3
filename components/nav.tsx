@@ -5,9 +5,9 @@ import { usePathname } from 'next/navigation'
 import { useRouter } from 'next/navigation'
 import {
   LayoutDashboard, ClipboardList, KanbanSquare, BookOpen, LogOut, Zap,
-  Home, FileText, Linkedin, Mail, TrendingUp, Lock, Inbox, Users, MessageSquare,
-  CheckSquare, Archive, ChevronDown, Phone, Briefcase, AlertTriangle, CalendarDays, PhoneCall,
-  Rocket, Globe,
+  Home, FileText, Inbox, Users, MessageSquare, TrendingUp,
+  CheckSquare, Archive, ChevronDown, Briefcase, AlertTriangle, CalendarDays, PhoneCall,
+  Rocket, Globe, Sparkles,
 } from 'lucide-react'
 import { getSupabaseBrowser } from '@/lib/supabase-browser'
 import { useEffect, useState } from 'react'
@@ -121,11 +121,6 @@ const NAV: NavCategory[] = [
       },
     ],
   },
-]
-
-const COMING_SOON = [
-  { label: 'Gov Contracts', icon: FileText    },
-  { label: 'Revenue',       icon: TrendingUp  },
 ]
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -251,6 +246,19 @@ export default function Nav() {
           Overview
         </Link>
 
+        {/* Updates */}
+        <Link
+          href="/updates"
+          className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
+            pathname === '/updates'
+              ? 'bg-[#181b27] text-[#e4e6f0] font-medium'
+              : 'text-[#636780] hover:text-[#e4e6f0] hover:bg-[#181b27]'
+          }`}
+        >
+          <Sparkles className="h-[15px] w-[15px] shrink-0" />
+          Updates
+        </Link>
+
         {/* Categories */}
         {NAV.map(category => (
           <div key={category.label}>
@@ -266,22 +274,6 @@ export default function Nav() {
           </div>
         ))}
 
-        {/* Coming soon */}
-        <div className="mt-3 pt-3 border-t border-[#1c2035]">
-          <p className="text-[9px] font-bold tracking-[0.15em] text-[#8b8fa8] uppercase px-3 pb-0.5">
-            Coming Soon
-          </p>
-        </div>
-        {COMING_SOON.map(({ label, icon: Icon }) => (
-          <div
-            key={label}
-            className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-[#2e3050] cursor-not-allowed select-none"
-          >
-            <Icon className="h-[15px] w-[15px] shrink-0" />
-            <span>{label}</span>
-            <Lock className="h-[10px] w-[10px] ml-auto shrink-0 opacity-50" />
-          </div>
-        ))}
       </nav>
 
       {/* Bottom: user + sign out */}

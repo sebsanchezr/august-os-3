@@ -157,8 +157,14 @@ export async function GET(req: NextRequest) {
       ['pushed_to_instantly', 'replied', 'meeting', 'bid_drafted', 'submitted', 'won', 'lost'].includes(r.status)
       && r.last_update && r.last_update >= windowStartDate,
     ).length
+    // "positive_reply" must mean a genuine inbound reply from a gov buyer.
+    // Only 'replied' (a buyer wrote back) and 'meeting' (a buyer reply led to a
+    // booked meeting) qualify. bid_drafted/submitted/won/lost are set by the
+    // gov engine's own outbound bidding on scanned tenders (see
+    // planning_notices.py) and never require a buyer reply, so counting them
+    // here previously inflated positives with contracts that never replied.
     const gov_positive = govAll.filter((r) =>
-      ['replied', 'meeting', 'bid_drafted', 'submitted', 'won', 'lost'].includes(r.status)
+      ['replied', 'meeting'].includes(r.status)
       && r.last_update && r.last_update >= windowStartDate,
     ).length
     // "booked" must mean an actual meeting was booked with the buyer — status

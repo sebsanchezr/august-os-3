@@ -43,6 +43,21 @@ export default function AccountsGrid() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [healthFilter, setHealthFilter] = useState<'all' | 'red' | 'amber' | 'green'>('all')
+  const [confirmingId, setConfirmingId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  async function handleDelete(id: string) {
+    setDeletingId(id)
+    try {
+      await deleteAccount(id)
+      setAccounts((prev) => prev.filter((a) => a.id !== id))
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setDeletingId(null)
+      setConfirmingId(null)
+    }
+  }
 
   useEffect(() => {
     fetchAccounts()
@@ -146,28 +161,58 @@ export default function AccountsGrid() {
       </div>
 
       {/* Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {displayed.map((account) => (
           <Link
             key={account.id}
             href={`/accounts/${account.id}`}
-            className={`block rounded-xl border p-4 transition-all hover:border-[#3d4060] ${HEALTH_BG[account.health] ?? HEALTH_BG.green}`}
+            className={`group relative block min-w-0 rounded-xl border p-4 transition-all hover:border-[#3d4060] ${HEALTH_BG[account.health] ?? HEALTH_BG.green}`}
           >
             {/* Name + health */}
-            <div className="flex items-start justify-between mb-3">
-              <div>
-                <p className="text-[#e4e6f0] font-medium text-sm">{account.name}</p>
+            <div className="flex items-start justify-between gap-2 mb-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-[#e4e6f0] font-medium text-sm truncate">{account.name}</p>
                 {account.am && (
-                  <p className="text-[#636780] text-xs mt-0.5 flex items-center gap-1">
-                    <Users size={10} />
-                    {(account.am as { name: string }).name}
+                  <p className="text-[#636780] text-xs mt-0.5 flex items-center gap-1 min-w-0">
+                    <Users size={10} className="shrink-0" />
+                    <span className="truncate">{(account.am as { name: string }).name}</span>
                   </p>
                 )}
               </div>
-              <Circle
-                size={10}
-                className={`fill-current shrink-0 mt-1 ${HEALTH_COLOUR[account.health] ?? HEALTH_COLOUR.green}`}
-              />
+              <div className="flex items-center gap-1.5 shrink-0 mt-1">
+                {confirmingId === account.id ? (
+                  <span className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      disabled={deletingId === account.id}
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(account.id) }}
+                      className="rounded px-1.5 py-0.5 text-[10px] bg-red-600 hover:bg-red-500 text-white transition-colors disabled:opacity-50"
+                    >
+                      {deletingId === account.id ? '...' : 'Delete'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmingId(null) }}
+                      className="rounded px-1.5 py-0.5 text-[10px] bg-[#181b27] hover:bg-[#1c2035] text-[#636780] border border-[#1c2035] transition-colors"
+                    >
+                      No
+                    </button>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    aria-label="Delete client"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmingId(account.id) }}
+                    className="text-[#3d4060] hover:text-red-400 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                )}
+                <Circle
+                  size={10}
+                  className={`fill-current ${HEALTH_COLOUR[account.health] ?? HEALTH_COLOUR.green}`}
+                />
+              </div>
             </div>
 
             {/* MRR */}

@@ -612,3 +612,48 @@ export function notifyMeetingPrepPack(
   }
   void post(ACCOUNTS_WEBHOOK_URL, `Prep pack ready for ${client.name}, call at ${when}.`, [embed])
 }
+
+// Post-meeting follow-up: after a transcript is found for a past call, the
+// followup cron drafts a client-facing recap and posts it here so Seb can
+// copy/paste and send. Distinct from minutes (internal) and from the prep pack.
+export function notifyPostMeetingMessage(
+  client: PrepClient,
+  meeting: PrepMeeting,
+  message: string,
+): void {
+  const when = new Date(meeting.scheduled_at).toLocaleString('en-GB', {
+    weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London',
+  })
+  const embed: Embed = {
+    title: `Follow-up ready: ${client.name} (${when})`,
+    url: `${OS_URL}/meetings`,
+    color: 0x8B5CF6,
+    fields: [
+      { name: 'Post-meeting message (copy/paste to client)', value: fmtField(message) },
+    ],
+    footer: { text: 'August OS Meetings' },
+    timestamp: new Date().toISOString(),
+  }
+  void post(ACCOUNTS_WEBHOOK_URL, `Transcript in. Follow-up message ready for ${client.name}.`, [embed])
+}
+
+// Daily staleness check: metrics ingestion is pushed by the external Mac
+// reporter, so this warns when a client's numbers have gone stale (>24h) and
+// the OS is showing old data.
+export function notifyMetricsStale(
+  stale: { id: string; name: string; hoursOld: number | null }[],
+): void {
+  if (!stale.length) return
+  const lines = stale
+    .map(c => `- ${c.name}: ${c.hoursOld === null ? 'no metrics ever recorded' : `${c.hoursOld}h old`}`)
+    .join('\n')
+  const embed: Embed = {
+    title: `Client metrics are stale (${stale.length})`,
+    url: `${OS_URL}/accounts`,
+    color: 0xF59E0B,
+    description: `These clients have no fresh performance data in the last 24h. Check the Mac reporter is running.\n\n${fmtField(lines)}`,
+    footer: { text: 'August OS Accounts' },
+    timestamp: new Date().toISOString(),
+  }
+  void post(ACCOUNTS_WEBHOOK_URL, `Metrics staleness alert: ${stale.length} client(s) behind.`, [embed])
+}

@@ -640,3 +640,14 @@ export type SalesCall = {
   pipeline_deals?: PipelineDeal | null
   owner?: Pick<Profile, 'id' | 'name'> | null
 }
+
+// ─── OS Updates (team changelog) ───────────────────────────────────────────────
+export type OsUpdateTag = 'New' | 'Fix' | 'Building' | 'Improved'
+
+export type OsUpdate = {
+  id: string
+  title: string
+  description: string | null
+  tag: OsUpdateTag | null
+  created_at: string
+}

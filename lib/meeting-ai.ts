@@ -94,3 +94,46 @@ A ready-to-send message from Seb to the client confirming the call and agenda. F
     preMeetingMessage: (messageMatch?.[1] ?? '').trim(),
   }
 }
+
+export type PostMeetingInput = {
+  clientName: string
+  contactName: string | null
+  meetingType: string
+  scheduledAt: string
+  transcript: string
+}
+
+// Drafts a client-facing follow-up message from a meeting transcript, for Seb
+// to copy-paste and send. Nothing is sent from here.
+export async function draftPostMeetingMessage(input: PostMeetingInput): Promise<string> {
+  // Cap transcript length so we never blow the context on a very long call.
+  const transcript = input.transcript.length > 24000
+    ? input.transcript.slice(0, 24000) + '\n\n[transcript truncated]'
+    : input.transcript
+
+  const prompt = `You are Seb, an agency owner at August Marketing (UK paid media agency), writing a short follow-up message to a client after a call. ${STYLE_RULES}
+
+Client: ${input.clientName}
+Contact: ${input.contactName ?? 'unknown, use the client name'}
+Meeting type: ${input.meetingType}
+When: ${input.scheduledAt}
+
+Transcript of the call:
+${transcript}
+
+Write ONE ready-to-send follow-up message from Seb to the client. Requirements:
+- Start with "Hi ${input.contactName ?? input.clientName},".
+- Thank them briefly for the call.
+- Recap the 2-4 key things discussed or decided (specific, drawn from the transcript, no invented numbers).
+- List what August will do next and, if any, what is needed from the client, as short lines.
+- Warm, professional, confident. Under 130 words. No em-dashes. No markdown headers, no bullet symbols other than short line breaks. End on a forward-looking line.
+Output only the message text, nothing before or after.`
+
+  const res = await client.messages.create({
+    model: SONNET,
+    max_tokens: 800,
+    messages: [{ role: 'user', content: prompt }],
+  })
+
+  return extractText(res).trim()
+}

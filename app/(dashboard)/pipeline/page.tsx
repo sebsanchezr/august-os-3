@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Rocket } from 'lucide-react'
 import { KpiCard } from '@/components/kpi-card'
 import StartOnboardingModal from '@/components/onboarding/start-onboarding-modal'
+import PipelineDealDrawer from '@/components/pipeline-deal-drawer'
 import { fetchPipeline, updatePipelineDeal } from '@/lib/pipeline-client'
 import { fetchOnboardings } from '@/lib/onboarding-client'
 import { ONBOARDING_STATUS_LABELS } from '@/lib/types'
@@ -49,6 +50,7 @@ export default function PipelinePage() {
   const [channelFilter, setChannelFilter] = useState<SourceChannel | 'all'>('all')
   const [movingId, setMovingId] = useState<string | null>(null)
   const [onboardingModalDeal, setOnboardingModalDeal] = useState<PipelineDeal | null>(null)
+  const [editingDeal, setEditingDeal] = useState<PipelineDeal | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
 
   async function load() {
@@ -141,7 +143,7 @@ export default function PipelinePage() {
         </select>
       </div>
 
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <KpiCard label="Open Deals" value={openDeals.length} accent="blue" />
         <KpiCard label="Weighted Pipeline" value={formatMoney(weightedPipeline)} accent="amber" subtext="sum of MRR x probability" />
         <KpiCard label="Won MRR" value={formatMoney(wonMrr)} accent="green" />
@@ -165,11 +167,11 @@ export default function PipelinePage() {
           <span className="text-sm text-[#636780]">Loading pipeline...</span>
         </div>
       ) : (
-        <div className="grid grid-cols-8 gap-3 overflow-x-auto pb-4">
+        <div className="flex gap-3 overflow-x-auto pb-4">
           {STAGES.map((stage) => {
             const stageDeals = filtered.filter((d) => d.stage === stage.key)
             return (
-              <div key={stage.key} className="min-w-[180px]">
+              <div key={stage.key} className="w-[200px] shrink-0">
                 <div className={`flex items-center justify-between border-l-2 ${stage.accent} pl-2 mb-2`}>
                   <span className="text-[11px] font-semibold uppercase tracking-wide text-[#e4e6f0]">{stage.label}</span>
                   <span className="text-[11px] text-[#636780] tabular-nums">{stageDeals.length}</span>
@@ -178,7 +180,8 @@ export default function PipelinePage() {
                   {stageDeals.map((deal) => (
                     <div
                       key={deal.id}
-                      className={`bg-[#10121a] border rounded-lg p-3 ${isRotting(deal) ? 'border-amber-500/40' : 'border-[#1c2035]'}`}
+                      onClick={() => setEditingDeal(deal)}
+                      className={`bg-[#10121a] border rounded-lg p-3 cursor-pointer hover:border-indigo-500/40 transition-colors ${isRotting(deal) ? 'border-amber-500/40' : 'border-[#1c2035]'}`}
                     >
                       <p className="text-xs font-medium text-[#e4e6f0] truncate">{deal.prospect_name}</p>
                       {deal.company && <p className="text-[10px] text-[#636780] truncate">{deal.company}</p>}
@@ -198,13 +201,14 @@ export default function PipelinePage() {
                         onboardingByDeal[deal.id] ? (
                           <Link
                             href="/onboarding"
+                            onClick={(e) => e.stopPropagation()}
                             className="mt-2 flex items-center justify-center gap-1 text-[10px] px-1.5 py-1 rounded bg-[#1c2035] text-[#8b8fa8] hover:text-[#e4e6f0]"
                           >
                             Onboarding: {ONBOARDING_STATUS_LABELS[onboardingByDeal[deal.id].status]}
                           </Link>
                         ) : (
                           <button
-                            onClick={() => setOnboardingModalDeal(deal)}
+                            onClick={(e) => { e.stopPropagation(); setOnboardingModalDeal(deal) }}
                             className="mt-2 w-full flex items-center justify-center gap-1 text-[10px] px-1.5 py-1 rounded bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600/30"
                           >
                             <Rocket size={10} /> Start Onboarding
@@ -214,6 +218,7 @@ export default function PipelinePage() {
                       <select
                         value={deal.stage}
                         disabled={movingId === deal.id}
+                        onClick={(e) => e.stopPropagation()}
                         onChange={(e) => moveStage(deal, e.target.value as PipelineStage)}
                         className="w-full mt-2 bg-[#08090c] border border-[#1c2035] rounded px-1.5 py-1 text-[10px] text-[#e4e6f0]"
                       >
@@ -232,6 +237,12 @@ export default function PipelinePage() {
           })}
         </div>
       )}
+
+      <PipelineDealDrawer
+        deal={editingDeal}
+        onClose={() => setEditingDeal(null)}
+        onSaved={(updated) => setDeals((prev) => prev.map((d) => (d.id === updated.id ? updated : d)))}
+      />
 
       {onboardingModalDeal && (
         <StartOnboardingModal

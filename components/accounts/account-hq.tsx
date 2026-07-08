@@ -8,6 +8,7 @@ import { useTaskMeta, useCurrentUserId } from '@/lib/tasks-client'
 import AccountModals, { type ModalKind } from './account-modals'
 import ReportView from './report-view'
 import ReportHistory from './report-history'
+import PastMeetings from './past-meetings'
 import type { Client, ClientIssue, ClientReport, ClientMeeting, ClientMetricsDaily } from '@/lib/types'
 
 const HEALTH_COLOUR: Record<string, string> = {
@@ -50,7 +51,7 @@ type AccountData = {
   }>
 }
 
-type TabId = 'overview' | 'report' | 'reports' | 'settings'
+type TabId = 'overview' | 'report' | 'meetings' | 'reports' | 'settings'
 
 export default function AccountHQ({ accountId }: { accountId: string }) {
   const [data, setData] = useState<AccountData | null>(null)
@@ -160,6 +161,7 @@ export default function AccountHQ({ accountId }: { accountId: string }) {
         {([
           ['overview', 'Overview'],
           ['report', 'Weekly Report'],
+          ['meetings', 'Past Meetings'],
           ['reports', 'History'],
           ['settings', 'Settings'],
         ] as [TabId, string][]).map(([t, label]) => (
@@ -308,6 +310,11 @@ export default function AccountHQ({ accountId }: { accountId: string }) {
             <ActionButton icon={<Calendar size={12} />} label="Schedule meeting" onClick={() => setModal('meeting')} />
           </div>
         </div>
+      )}
+
+      {/* Past meetings tab */}
+      {tab === 'meetings' && (
+        <PastMeetings clientId={accountId} />
       )}
 
       {/* Reports tab */}

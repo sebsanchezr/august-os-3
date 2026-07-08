@@ -284,11 +284,13 @@ export async function fetchAllMeetings(opts: {
   past?: boolean
   client_id?: string
   type?: string
+  status?: string
 } = {}): Promise<MeetingWithClient[]> {
   const params = new URLSearchParams()
   if (opts.past) params.set('past', 'true')
   if (opts.client_id) params.set('client_id', opts.client_id)
   if (opts.type) params.set('type', opts.type)
+  if (opts.status) params.set('status', opts.status)
   const res = await fetch(`/api/meetings?${params}`)
   if (!res.ok) throw new Error('Failed to load meetings')
   const json = await res.json()
