@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdmin } from '@/lib/supabase-server'
 import { notifyAssigned, notifySentToMediaBuyer } from '@/lib/discord-notify'
 
+export const dynamic = 'force-dynamic'
+
 const CREATIVE_STATUSES = ['brief', 'editing', 'revision', 'approved_by_client', 'sent_to_media_buyer', 'live'] as const
 const OPS_STATUSES = ['brief', 'in_progress', 'review', 'completed'] as const
 const PRIORITIES = ['urgent', 'high', 'normal', 'low'] as const
@@ -51,8 +53,20 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: taskRes.error?.message ?? 'Not found' }, { status: 404 })
   }
 
+  // Second lightweight lookup: collaborator_ids is a plain uuid[] column with
+  // no FK Supabase can embed. Degrades to [] if the column doesn't exist yet.
+  const collaboratorIds: string[] = taskRes.data.collaborator_ids ?? []
+  let collaboratorProfiles: unknown[] = []
+  if (collaboratorIds.length > 0) {
+    const { data: collabProfiles } = await supabase
+      .from('profiles')
+      .select('id, name, role')
+      .in('id', collaboratorIds)
+    collaboratorProfiles = collabProfiles ?? []
+  }
+
   return NextResponse.json({
-    task: taskRes.data,
+    task: { ...taskRes.data, collaborator_profiles: collaboratorProfiles },
     comments: commentsRes.data ?? [],
     events: eventsRes.data ?? [],
   })
@@ -146,7 +160,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 
   // Plain field edits
-  const editableFields = ['title', 'description', 'priority', 'due_date', 'tags', 'client_id', 'position', 'meeting_ref', 'recurrence'] as const
+  const editableFields = ['title', 'description', 'priority', 'due_date', 'tags', 'client_id', 'position', 'meeting_ref', 'recurrence', 'collaborator_ids'] as const
   const editedFields: string[] = []
   for (const field of editableFields) {
     if (field in body && body[field] !== current[field]) {
@@ -164,12 +178,23 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ error: 'Invalid priority' }, { status: 400 })
   }
 
-  const { data: updated, error: updateErr } = await supabase
+  let { data: updated, error: updateErr } = await supabase
     .from('tasks')
     .update(updates)
     .eq('id', id)
     .select()
     .single()
+
+  // Column not migrated yet: retry without collaborator_ids.
+  if (updateErr?.code === '42703' && 'collaborator_ids' in updates) {
+    const { collaborator_ids: _omit, ...updatesWithoutCollaborators } = updates
+    ;({ data: updated, error: updateErr } = await supabase
+      .from('tasks')
+      .update(updatesWithoutCollaborators)
+      .eq('id', id)
+      .select()
+      .single())
+  }
 
   if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 })
 

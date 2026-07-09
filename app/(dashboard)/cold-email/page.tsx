@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { KpiCard } from '@/components/kpi-card'
 import { timeAgo } from '@/lib/utils'
-import { Mail, Reply, ThumbsUp, Calendar, Activity, TrendingUp, Layers } from 'lucide-react'
+import { Mail, Reply, ThumbsUp, Calendar, Activity, TrendingUp, Layers, Gauge } from 'lucide-react'
 
 type Window = 'yesterday' | '7d' | '30d'
 
@@ -35,6 +35,95 @@ const EVENT_COLORS: Record<string, string> = {
 
 function Skeleton({ className = '' }: { className?: string }) {
   return <div className={`animate-pulse bg-[#181b27] rounded-lg ${className}`} />
+}
+
+type BenchmarkStatus = 'green' | 'amber' | 'red'
+
+type Benchmark = {
+  label: string
+  value: string
+  status: BenchmarkStatus
+  hint: string
+}
+
+const STATUS_STYLES: Record<BenchmarkStatus, { dot: string; text: string }> = {
+  green: { dot: 'bg-green-400', text: 'text-green-400' },
+  amber: { dot: 'bg-amber-400', text: 'text-amber-400' },
+  red: { dot: 'bg-red-400', text: 'text-red-400' },
+}
+
+// Ecom-agency cold email standards, computed client-side from the fetched
+// KPIs. No LLM involved, just thresholds against widely used cold outbound
+// benchmarks for agencies running ecom/DTC style campaigns.
+function computeBenchmarks(kpis: any): Benchmark[] {
+  const sent = kpis.sent ?? 0
+  const replies = kpis.replies ?? 0
+  const bounces = kpis.bounces ?? 0
+  const booked = kpis.booked ?? 0
+
+  const replyRate = kpis.replyRate ?? 0
+  const positiveRate = kpis.positiveRate ?? 0
+  const bounceRate = sent > 0 ? (bounces / sent) * 100 : 0
+  const bookedPer1000 = sent > 0 ? (booked / sent) * 1000 : 0
+
+  const replyStatus: BenchmarkStatus = replyRate >= 1 ? 'green' : replyRate >= 0.5 ? 'amber' : 'red'
+  const positiveStatus: BenchmarkStatus = positiveRate >= 20 ? 'green' : positiveRate >= 10 ? 'amber' : 'red'
+  const bounceStatus: BenchmarkStatus = bounceRate < 3 ? 'green' : bounceRate < 5 ? 'amber' : 'red'
+  const bookedStatus: BenchmarkStatus = bookedPer1000 >= 1 ? 'green' : bookedPer1000 >= 0.5 ? 'amber' : 'red'
+
+  return [
+    {
+      label: 'Reply Rate',
+      value: `${replyRate.toFixed(1)}%`,
+      status: replyStatus,
+      hint: 'Target 1-3% of sent',
+    },
+    {
+      label: 'Positive Share',
+      value: `${positiveRate.toFixed(1)}%`,
+      status: positiveStatus,
+      hint: 'Target 20-40% of replies',
+    },
+    {
+      label: 'Bounce Rate',
+      value: `${bounceRate.toFixed(1)}%`,
+      status: bounceStatus,
+      hint: 'Must stay under 3%',
+    },
+    {
+      label: 'Booked / 1000 Sent',
+      value: bookedPer1000.toFixed(1),
+      status: bookedStatus,
+      hint: 'Target 1-3 booked calls',
+    },
+  ]
+}
+
+function BenchmarksStrip({ kpis }: { kpis: any }) {
+  const benchmarks = computeBenchmarks(kpis)
+  return (
+    <div className="rounded-xl border border-[#1c2035] bg-[#10121a] p-4 mb-5">
+      <p className="text-sm font-medium text-[#e4e6f0] mb-3 flex items-center gap-2">
+        <Gauge className="w-3.5 h-3.5 text-[#636780]" />
+        Benchmarks
+      </p>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {benchmarks.map((b) => {
+          const style = STATUS_STYLES[b.status]
+          return (
+            <div key={b.label} className="rounded-lg bg-[#181b27] px-3 py-2.5">
+              <div className="flex items-center gap-1.5 mb-1">
+                <div className={`w-1.5 h-1.5 rounded-full ${style.dot}`} />
+                <p className="text-[10px] font-medium text-[#3d4060] uppercase tracking-wider">{b.label}</p>
+              </div>
+              <p className={`text-sm font-semibold ${style.text}`}>{b.value}</p>
+              <p className="text-[10px] text-[#636780] mt-0.5">{b.hint}</p>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
 }
 
 function EmptyState({ label }: { label: string }) {
@@ -131,6 +220,8 @@ export default function ColdEmailDashboard() {
         </div>
       ) : null}
 
+      {!loading && kpis ? <BenchmarksStrip kpis={kpis} /> : null}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Campaign breakdown */}
         <div className="lg:col-span-2 rounded-xl border border-[#1c2035] bg-[#10121a] p-5">
@@ -155,12 +246,13 @@ export default function ColdEmailDashboard() {
               </div>
               {campaigns.map((c) => {
                 const rr = c.sent > 0 ? ((c.replies / c.sent) * 100).toFixed(1) : '0.0'
+                const displayName = c.campaignName || c.name
                 return (
                   <div
-                    key={c.name}
+                    key={c.campaignName || c.name}
                     className="grid grid-cols-5 gap-2 bg-[#181b27] rounded-lg px-3 py-2.5 items-center"
                   >
-                    <p className="text-sm text-[#e4e6f0] font-medium col-span-2 truncate capitalize">{c.name}</p>
+                    <p className="text-sm text-[#e4e6f0] font-medium col-span-2 truncate capitalize">{displayName}</p>
                     <p className="text-sm text-[#636780] tabular-nums text-right">{c.sent.toLocaleString()}</p>
                     <p className="text-sm tabular-nums text-right">
                       <span className="text-[#e4e6f0]">{c.replies}</span>

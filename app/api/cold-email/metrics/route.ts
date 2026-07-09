@@ -43,6 +43,8 @@ export async function GET(req: NextRequest) {
     supabase
       .from('ce_events')
       .select('id, type, payload, occurred_at, lead_id, ce_leads(email, first_name, last_name, company, campaign)')
+      .eq('type', 'reply_in')
+      .not('payload->>bucket', 'in', '(hard_no,wrong_person)')
       .order('occurred_at', { ascending: false })
       .limit(20),
   ])
@@ -63,20 +65,38 @@ export async function GET(req: NextRequest) {
   const openPipeline = pipeline.filter((p) => openStages.includes(p.stage)).length
   const callsBooked = pipeline.filter((p) => p.stage === 'call_booked').length
 
-  // per-campaign breakdown from metrics
-  const campaignMap: Record<string, { sent: number; replies: number; positives: number; booked: number }> = {}
+  // per-campaign breakdown from metrics. Group on campaign_id when the
+  // Instantly sync has populated it (029_ce_metrics_campaign.sql), falling
+  // back to the legacy free-text campaign label otherwise.
+  const campaignMap: Record<
+    string,
+    { name: string; campaignName: string | null; sent: number; replies: number; positives: number; bounces: number; booked: number }
+  > = {}
   for (const row of metrics) {
-    const c = row.campaign ?? 'unknown'
-    if (!campaignMap[c]) campaignMap[c] = { sent: 0, replies: 0, positives: 0, booked: 0 }
-    campaignMap[c].sent += row.sent ?? 0
-    campaignMap[c].replies += row.replies ?? 0
-    campaignMap[c].positives += row.positives ?? 0
-    campaignMap[c].booked += row.booked ?? 0
+    const key = row.campaign_id ?? row.campaign ?? 'unknown'
+    if (!campaignMap[key]) {
+      campaignMap[key] = {
+        name: row.campaign ?? 'unknown',
+        campaignName: row.campaign_name ?? null,
+        sent: 0,
+        replies: 0,
+        positives: 0,
+        bounces: 0,
+        booked: 0,
+      }
+    }
+    campaignMap[key].sent += row.sent ?? 0
+    campaignMap[key].replies += row.replies ?? 0
+    campaignMap[key].positives += row.positives ?? 0
+    campaignMap[key].bounces += row.bounces ?? 0
+    campaignMap[key].booked += row.booked ?? 0
   }
 
+  const bounces = metrics.reduce((s, r) => s + (r.bounces ?? 0), 0)
+
   return NextResponse.json({
-    kpis: { sent, replies, positives, booked, replyRate, positiveRate, openPipeline, callsBooked },
-    campaigns: Object.entries(campaignMap).map(([name, vals]) => ({ name, ...vals })),
+    kpis: { sent, replies, positives, booked, bounces, replyRate, positiveRate, openPipeline, callsBooked },
+    campaigns: Object.values(campaignMap),
     recent: events,
   })
 }

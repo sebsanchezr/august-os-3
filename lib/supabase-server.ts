@@ -37,3 +37,23 @@ export function createSupabaseAdmin() {
     }
   )
 }
+
+// The LinkedIn Ghost engine writes leads/lead_activities/reply_conversations
+// into a separate Supabase project (the lead_pipeline project), not the OS
+// project used by createSupabaseAdmin(). Anything reading that data (e.g. the
+// LinkedIn dashboard) must use this client instead.
+export function createLeadPipelineAdmin() {
+  const url = process.env.LEAD_PIPELINE_SUPABASE_URL
+  const key = process.env.LEAD_PIPELINE_SUPABASE_SERVICE_KEY
+  if (!url || !key) {
+    throw new Error(
+      'Missing LEAD_PIPELINE_SUPABASE_URL / LEAD_PIPELINE_SUPABASE_SERVICE_KEY env vars'
+    )
+  }
+  return createServerClient(url, key, {
+    cookies: {
+      getAll() { return [] },
+      setAll() {},
+    },
+  })
+}

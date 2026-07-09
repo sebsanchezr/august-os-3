@@ -86,6 +86,21 @@ export default function TaskDetail({ taskId, profiles, clients, currentUserId, o
     await apply({ status: next })
   }
 
+  async function changeAssignee(id: string | null) {
+    if (!task) return
+    const body: Record<string, unknown> = { assignee_id: id }
+    const current = task.collaborator_ids ?? []
+    if (id && current.includes(id)) body.collaborator_ids = current.filter((c) => c !== id)
+    await apply(body)
+  }
+
+  async function toggleCollaborator(id: string) {
+    if (!task) return
+    const current = task.collaborator_ids ?? []
+    const next = current.includes(id) ? current.filter((c) => c !== id) : [...current, id]
+    await apply({ collaborator_ids: next })
+  }
+
   async function saveDescription() {
     if (task && descDraft !== task.description) await apply({ description: descDraft })
   }
@@ -162,7 +177,7 @@ export default function TaskDetail({ taskId, profiles, clients, currentUserId, o
             <div className="grid grid-cols-2 gap-3 mb-5">
               <div>
                 <label className="block text-[10px] uppercase tracking-wide text-[#3d4060] mb-1">Assignee</label>
-                <select value={task.assignee_id ?? ''} onChange={(e) => apply({ assignee_id: e.target.value || null })} className={fieldSelect}>
+                <select value={task.assignee_id ?? ''} onChange={(e) => changeAssignee(e.target.value || null)} className={fieldSelect}>
                   <option value="">Unassigned</option>
                   {profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
@@ -188,6 +203,32 @@ export default function TaskDetail({ taskId, profiles, clients, currentUserId, o
                 <input type="date" value={task.due_date ?? ''} onChange={(e) => apply({ due_date: e.target.value || null })} className={fieldSelect} />
               </div>
             </div>
+
+            {/* Collaborators: media buyer + anyone else tagged alongside the assignee */}
+            {profiles.filter((p) => p.id !== task.assignee_id).length > 0 && (
+              <div className="mb-5">
+                <label className="block text-[10px] uppercase tracking-wide text-[#3d4060] mb-1.5">Collaborators</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {profiles.filter((p) => p.id !== task.assignee_id).map((p) => {
+                    const active = (task.collaborator_ids ?? []).includes(p.id)
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        disabled={busy}
+                        onClick={() => toggleCollaborator(p.id)}
+                        className={`text-[11px] font-medium rounded-full px-2.5 py-1 transition-colors disabled:opacity-50
+                          ${active
+                            ? 'bg-indigo-600 text-white'
+                            : 'bg-[#181b27] text-[#636780] hover:text-[#e4e6f0] hover:bg-[#1c2030]'}`}
+                      >
+                        {p.name}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Department + source line */}
             <div className="flex items-center gap-2 mb-5 text-[11px] text-[#636780]">

@@ -8,6 +8,7 @@ const TAG_STYLES: Record<OsUpdateTag, string> = {
   Fix:      'bg-amber-500/10 text-amber-400 border border-amber-500/20',
   Building: 'bg-sky-500/10 text-sky-400 border border-sky-500/20',
   Improved: 'bg-purple-500/10 text-purple-400 border border-purple-500/20',
+  Digest:   'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20',
 }
 
 function formatDate(iso: string): string {

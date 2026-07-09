@@ -1,0 +1,504 @@
+'use client'
+
+import { useEffect, useState, useCallback } from 'react'
+import {
+  Plus, ExternalLink, ChevronDown, ChevronUp, Trash2, Sparkles, Check, Image as ImageIcon, X,
+} from 'lucide-react'
+import {
+  ASSET_KINDS,
+  type AssetKind,
+  type ClientOption,
+  type CreativeAssetWithClient,
+  type StrategyItem,
+} from '@/lib/creatives'
+
+type Tab = 'strategies' | 'library'
+
+const STATUS_LABELS: Record<string, string> = {
+  draft: 'Draft',
+  approved: 'Approved',
+  generating: 'Generating',
+  delivered: 'Delivered',
+}
+
+const STATUS_COLOURS: Record<string, string> = {
+  draft: 'bg-amber-500/15 text-amber-400',
+  approved: 'bg-indigo-500/15 text-indigo-400',
+  generating: 'bg-purple-500/15 text-purple-400',
+  delivered: 'bg-emerald-500/15 text-emerald-400',
+}
+
+const KIND_LABELS: Record<AssetKind, string> = {
+  drive: 'Drive',
+  figma: 'Figma',
+  brief: 'Brief',
+  asset: 'Asset',
+  inspiration: 'Inspiration',
+  other: 'Other',
+}
+
+function fmtDate(d: string): string {
+  return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+}
+
+export default function CreativesPage() {
+  const [tab, setTab] = useState<Tab>('strategies')
+  const [clients, setClients] = useState<ClientOption[]>([])
+
+  const [strategyItems, setStrategyItems] = useState<StrategyItem[]>([])
+  const [strategiesLoading, setStrategiesLoading] = useState(true)
+  const [strategiesError, setStrategiesError] = useState<string | null>(null)
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [busyStrategyId, setBusyStrategyId] = useState<string | null>(null)
+  const [genNote, setGenNote] = useState<Record<string, string>>({})
+
+  const [showNewStrategy, setShowNewStrategy] = useState(false)
+  const [newStrategy, setNewStrategy] = useState({ client_id: '', focus: '', notes: '' })
+  const [creatingStrategy, setCreatingStrategy] = useState(false)
+  const [newStrategyError, setNewStrategyError] = useState<string | null>(null)
+
+  const [assets, setAssets] = useState<CreativeAssetWithClient[]>([])
+  const [assetsLoading, setAssetsLoading] = useState(true)
+  const [assetsError, setAssetsError] = useState<string | null>(null)
+  const [showAddLink, setShowAddLink] = useState(false)
+  const [newAsset, setNewAsset] = useState({ client_id: '', title: '', kind: 'drive' as AssetKind, url: '', notes: '' })
+  const [addingAsset, setAddingAsset] = useState(false)
+  const [newAssetError, setNewAssetError] = useState<string | null>(null)
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+
+  const fetchClients = useCallback(async () => {
+    const res = await fetch('/api/creatives?scope=clients')
+    if (res.ok) {
+      const d = await res.json()
+      setClients(d.clients ?? [])
+    }
+  }, [])
+
+  const fetchStrategies = useCallback(async () => {
+    setStrategiesLoading(true)
+    setStrategiesError(null)
+    try {
+      const res = await fetch('/api/creatives?scope=strategies')
+      const d = await res.json()
+      if (!res.ok) { setStrategiesError(d.error ?? 'Failed to load strategies'); return }
+      setStrategyItems(d.items ?? [])
+    } catch {
+      setStrategiesError('Failed to load strategies')
+    } finally {
+      setStrategiesLoading(false)
+    }
+  }, [])
+
+  const fetchAssets = useCallback(async () => {
+    setAssetsLoading(true)
+    setAssetsError(null)
+    try {
+      const res = await fetch('/api/creatives?scope=assets')
+      const d = await res.json()
+      if (!res.ok) { setAssetsError(d.error ?? 'Failed to load creative library'); return }
+      setAssets(d.assets ?? [])
+    } catch {
+      setAssetsError('Failed to load creative library')
+    } finally {
+      setAssetsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchClients()
+    fetchStrategies()
+    fetchAssets()
+  }, [fetchClients, fetchStrategies, fetchAssets])
+
+  function toggleExpanded(id: string) {
+    setExpanded(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  async function submitNewStrategy() {
+    if (!newStrategy.client_id || !newStrategy.focus.trim()) {
+      setNewStrategyError('Pick a client and describe this week\'s focus.')
+      return
+    }
+    setCreatingStrategy(true)
+    setNewStrategyError(null)
+    try {
+      const res = await fetch('/api/creatives/strategy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newStrategy),
+      })
+      const d = await res.json()
+      if (!res.ok) { setNewStrategyError(d.error ?? 'Failed to draft strategy'); return }
+      setShowNewStrategy(false)
+      setNewStrategy({ client_id: '', focus: '', notes: '' })
+      fetchStrategies()
+    } catch {
+      setNewStrategyError('Failed to draft strategy')
+    } finally {
+      setCreatingStrategy(false)
+    }
+  }
+
+  async function approveStrategy(id: string) {
+    setBusyStrategyId(id)
+    try {
+      const res = await fetch(`/api/creatives/strategy/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'approve' }),
+      })
+      if (res.ok) fetchStrategies()
+    } finally {
+      setBusyStrategyId(null)
+    }
+  }
+
+  async function generateStatics(id: string) {
+    setBusyStrategyId(id)
+    try {
+      const res = await fetch('/api/creatives/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ strategy_id: id }),
+      })
+      const d = await res.json()
+      if (d.skipped) {
+        setGenNote(prev => ({ ...prev, [id]: 'Image generation not connected yet.' }))
+      } else if (d.queued) {
+        setGenNote(prev => ({ ...prev, [id]: 'Generation queued.' }))
+        fetchStrategies()
+      } else {
+        setGenNote(prev => ({ ...prev, [id]: d.error ?? 'Failed to queue generation.' }))
+      }
+    } finally {
+      setBusyStrategyId(null)
+    }
+  }
+
+  async function submitNewAsset() {
+    if (!newAsset.client_id || !newAsset.title.trim()) {
+      setNewAssetError('Pick a client and give the link a title.')
+      return
+    }
+    setAddingAsset(true)
+    setNewAssetError(null)
+    try {
+      const res = await fetch('/api/creatives', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newAsset),
+      })
+      const d = await res.json()
+      if (!res.ok) { setNewAssetError(d.error ?? 'Failed to add link'); return }
+      setShowAddLink(false)
+      setNewAsset({ client_id: '', title: '', kind: 'drive', url: '', notes: '' })
+      fetchAssets()
+    } catch {
+      setNewAssetError('Failed to add link')
+    } finally {
+      setAddingAsset(false)
+    }
+  }
+
+  async function deleteAsset(id: string) {
+    if (deleteConfirmId !== id) {
+      setDeleteConfirmId(id)
+      return
+    }
+    setDeleteConfirmId(null)
+    const res = await fetch(`/api/creatives?id=${id}`, { method: 'DELETE' })
+    if (res.ok) setAssets(prev => prev.filter(a => a.id !== id))
+  }
+
+  const assetsByClient = new Map<string, CreativeAssetWithClient[]>()
+  for (const a of assets) {
+    const key = a.client?.id ?? 'unknown'
+    const list = assetsByClient.get(key) ?? []
+    list.push(a)
+    assetsByClient.set(key, list)
+  }
+
+  return (
+    <div className="p-6 min-h-full">
+      <div className="flex items-center justify-between mb-5">
+        <h1 className="text-xl font-semibold text-[#e4e6f0]">Creative Hub</h1>
+        <div className="flex gap-1 bg-[#10121a] border border-[#1c2035] rounded-lg p-1">
+          {(['strategies', 'library'] as Tab[]).map(t => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`text-sm px-3 py-1.5 rounded-md transition-colors ${
+                tab === t ? 'bg-indigo-600 text-white' : 'text-[#636780] hover:text-[#e4e6f0]'
+              }`}
+            >
+              {t === 'strategies' ? "This Week's Strategies" : 'Creative Library'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {tab === 'strategies' && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-xs text-[#636780]">One strategy per client per week. Approve a draft, then queue statics.</p>
+            <button
+              onClick={() => setShowNewStrategy(v => !v)}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500"
+            >
+              <Plus className="h-3.5 w-3.5" /> New Strategy
+            </button>
+          </div>
+
+          {showNewStrategy && (
+            <div className="rounded-xl border border-[#1c2035] bg-[#10121a] p-4 mb-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-[#e4e6f0]">Draft a new strategy</p>
+                <button onClick={() => setShowNewStrategy(false)} className="text-[#636780] hover:text-[#e4e6f0]">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <select
+                value={newStrategy.client_id}
+                onChange={(e) => setNewStrategy(s => ({ ...s, client_id: e.target.value }))}
+                className="w-full bg-[#08090c] border border-[#1c2035] rounded-lg px-3 py-2 text-sm text-[#e4e6f0] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              >
+                <option value="">Select client...</option>
+                {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              <textarea
+                value={newStrategy.focus}
+                onChange={(e) => setNewStrategy(s => ({ ...s, focus: e.target.value }))}
+                placeholder="What should this week focus on? e.g. UGC angles for summer sale"
+                rows={2}
+                className="w-full bg-[#08090c] border border-[#1c2035] rounded-lg px-3 py-2 text-sm text-[#e4e6f0] focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none"
+              />
+              <textarea
+                value={newStrategy.notes}
+                onChange={(e) => setNewStrategy(s => ({ ...s, notes: e.target.value }))}
+                placeholder="Optional notes for the AI (constraints, assets available, etc.)"
+                rows={2}
+                className="w-full bg-[#08090c] border border-[#1c2035] rounded-lg px-3 py-2 text-sm text-[#e4e6f0] focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none"
+              />
+              {newStrategyError && <p className="text-xs text-red-400">{newStrategyError}</p>}
+              <button
+                onClick={submitNewStrategy}
+                disabled={creatingStrategy}
+                className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-50"
+              >
+                <Sparkles className="h-3.5 w-3.5" /> {creatingStrategy ? 'Drafting...' : 'Draft with AI'}
+              </button>
+            </div>
+          )}
+
+          {strategiesLoading ? (
+            <div className="flex items-center justify-center h-32">
+              <span className="text-sm text-[#636780]">Loading strategies...</span>
+            </div>
+          ) : strategiesError ? (
+            <div className="flex flex-col items-center justify-center py-16 rounded-xl border border-[#1c2035] bg-[#10121a]">
+              <p className="text-sm text-red-400">{strategiesError}</p>
+            </div>
+          ) : strategyItems.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 rounded-xl border border-[#1c2035] bg-[#10121a]">
+              <p className="text-sm text-[#636780]">No clients yet.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {strategyItems.map(({ client, strategy }) => (
+                <div key={client.id} className="rounded-xl border border-[#1c2035] bg-[#10121a] p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <p className="text-sm font-medium text-[#e4e6f0]">{client.name}</p>
+                        {strategy ? (
+                          <span className={`text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full ${STATUS_COLOURS[strategy.status] ?? ''}`}>
+                            {STATUS_LABELS[strategy.status] ?? strategy.status}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full bg-[#636780]/15 text-[#636780]">
+                            No strategy
+                          </span>
+                        )}
+                      </div>
+                      {strategy?.focus && <p className="text-xs text-[#636780]">{strategy.focus}</p>}
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      {strategy && strategy.status === 'draft' && (
+                        <button
+                          onClick={() => approveStrategy(strategy.id)}
+                          disabled={busyStrategyId === strategy.id}
+                          className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-50"
+                        >
+                          <Check className="h-3.5 w-3.5" /> Approve
+                        </button>
+                      )}
+                      {strategy && strategy.status === 'approved' && (
+                        <button
+                          onClick={() => generateStatics(strategy.id)}
+                          disabled={busyStrategyId === strategy.id}
+                          className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-[#181b27] text-[#e4e6f0] hover:bg-[#1c2035] disabled:opacity-50"
+                        >
+                          <ImageIcon className="h-3.5 w-3.5" /> Generate statics
+                        </button>
+                      )}
+                      {strategy?.strategy_md && (
+                        <button
+                          onClick={() => toggleExpanded(strategy.id)}
+                          className="flex items-center gap-1 text-xs px-2 py-1.5 rounded-lg text-[#636780] hover:text-[#e4e6f0]"
+                        >
+                          {expanded.has(strategy.id) ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {strategy && genNote[strategy.id] && (
+                    <p className="text-xs text-[#636780] mt-2">{genNote[strategy.id]}</p>
+                  )}
+
+                  {strategy?.strategy_md && expanded.has(strategy.id) && (
+                    <div className="mt-3 bg-[#08090c] rounded-lg p-3">
+                      <p className="text-xs text-[#e4e6f0] whitespace-pre-wrap leading-relaxed">{strategy.strategy_md}</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === 'library' && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-xs text-[#636780]">Drive links, briefs, and inspiration, grouped by client.</p>
+            <button
+              onClick={() => setShowAddLink(v => !v)}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500"
+            >
+              <Plus className="h-3.5 w-3.5" /> Add link
+            </button>
+          </div>
+
+          {showAddLink && (
+            <div className="rounded-xl border border-[#1c2035] bg-[#10121a] p-4 mb-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-[#e4e6f0]">Add a creative link</p>
+                <button onClick={() => setShowAddLink(false)} className="text-[#636780] hover:text-[#e4e6f0]">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <select
+                  value={newAsset.client_id}
+                  onChange={(e) => setNewAsset(a => ({ ...a, client_id: e.target.value }))}
+                  className="bg-[#08090c] border border-[#1c2035] rounded-lg px-3 py-2 text-sm text-[#e4e6f0] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                >
+                  <option value="">Select client...</option>
+                  {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+                <select
+                  value={newAsset.kind}
+                  onChange={(e) => setNewAsset(a => ({ ...a, kind: e.target.value as AssetKind }))}
+                  className="bg-[#08090c] border border-[#1c2035] rounded-lg px-3 py-2 text-sm text-[#e4e6f0] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                >
+                  {ASSET_KINDS.map(k => <option key={k} value={k}>{KIND_LABELS[k]}</option>)}
+                </select>
+              </div>
+              <input
+                value={newAsset.title}
+                onChange={(e) => setNewAsset(a => ({ ...a, title: e.target.value }))}
+                placeholder="Title, e.g. Brand assets folder"
+                className="w-full bg-[#08090c] border border-[#1c2035] rounded-lg px-3 py-2 text-sm text-[#e4e6f0] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+              <input
+                value={newAsset.url}
+                onChange={(e) => setNewAsset(a => ({ ...a, url: e.target.value }))}
+                placeholder="URL"
+                className="w-full bg-[#08090c] border border-[#1c2035] rounded-lg px-3 py-2 text-sm text-[#e4e6f0] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+              <input
+                value={newAsset.notes}
+                onChange={(e) => setNewAsset(a => ({ ...a, notes: e.target.value }))}
+                placeholder="Optional notes"
+                className="w-full bg-[#08090c] border border-[#1c2035] rounded-lg px-3 py-2 text-sm text-[#e4e6f0] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+              {newAssetError && <p className="text-xs text-red-400">{newAssetError}</p>}
+              <button
+                onClick={submitNewAsset}
+                disabled={addingAsset}
+                className="text-xs px-3 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-50"
+              >
+                {addingAsset ? 'Adding...' : 'Add link'}
+              </button>
+            </div>
+          )}
+
+          {assetsLoading ? (
+            <div className="flex items-center justify-center h-32">
+              <span className="text-sm text-[#636780]">Loading creative library...</span>
+            </div>
+          ) : assetsError ? (
+            <div className="flex flex-col items-center justify-center py-16 rounded-xl border border-[#1c2035] bg-[#10121a]">
+              <p className="text-sm text-red-400">{assetsError}</p>
+            </div>
+          ) : assets.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 rounded-xl border border-[#1c2035] bg-[#10121a]">
+              <p className="text-sm text-[#636780]">No creative links yet.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {Array.from(assetsByClient.entries()).map(([clientId, list]) => (
+                <div key={clientId} className="rounded-xl border border-[#1c2035] bg-[#10121a] p-4">
+                  <p className="text-sm font-medium text-[#e4e6f0] mb-3">{list[0].client?.name ?? 'Unknown client'}</p>
+                  <div className="space-y-2">
+                    {list.map(asset => (
+                      <div key={asset.id} className="flex items-start justify-between gap-3 bg-[#08090c] rounded-lg p-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-400">
+                              {KIND_LABELS[asset.kind]}
+                            </span>
+                            <span className="text-xs text-[#636780]">{fmtDate(asset.created_at)}</span>
+                          </div>
+                          {asset.url ? (
+                            <a
+                              href={asset.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm text-[#e4e6f0] hover:text-indigo-400 flex items-center gap-1.5"
+                            >
+                              {asset.title}
+                              <ExternalLink className="h-3 w-3 shrink-0" />
+                            </a>
+                          ) : (
+                            <p className="text-sm text-[#e4e6f0]">{asset.title}</p>
+                          )}
+                          {asset.notes && <p className="text-xs text-[#636780] mt-1">{asset.notes}</p>}
+                        </div>
+                        <button
+                          onClick={() => deleteAsset(asset.id)}
+                          className={`shrink-0 text-xs px-2 py-1.5 rounded-lg flex items-center gap-1 ${
+                            deleteConfirmId === asset.id
+                              ? 'bg-red-500/15 text-red-400'
+                              : 'text-[#636780] hover:text-[#e4e6f0]'
+                          }`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" /> {deleteConfirmId === asset.id ? 'Confirm' : ''}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}

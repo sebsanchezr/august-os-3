@@ -4,6 +4,40 @@ import type { DashboardMetrics, CallerStats, TrendPoint, RecentActivity } from '
 
 export const dynamic = 'force-dynamic'
 
+// ─── Report-date window (eod_reports.report_date is a plain DATE column) ──────
+// report_date comes back from Supabase as a plain 'YYYY-MM-DD' string. We build
+// comparison bounds from local calendar arithmetic (no toISOString()/UTC shift)
+// so a 'gte'/'lte' string comparison lines up with what was actually submitted.
+
+function ymd(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+function addDays(dateStr: string, delta: number): string {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const dt = new Date(y, m - 1, d)
+  dt.setDate(dt.getDate() + delta)
+  return ymd(dt)
+}
+
+function getReportDateWindow(window: string): { start: string; end: string; days: number; prevStart: string; prevEnd: string } {
+  const today = ymd(new Date())
+  if (window === 'yesterday') {
+    const day = addDays(today, -1)
+    return { start: day, end: day, days: 1, prevStart: addDays(day, -1), prevEnd: addDays(day, -1) }
+  }
+  const days = window === '30d' ? 30 : 7
+  const start = addDays(today, -(days - 1))
+  const prevEnd = addDays(start, -1)
+  const prevStart = addDays(prevEnd, -(days - 1))
+  return { start, end: today, days, prevStart, prevEnd }
+}
+
+// ─── ISO timestamp window (bookings + deals keep their existing behaviour) ────
+
 function getWindowBounds(window: string): { windowStart: string; windowEnd: string | null; days: number } {
   if (window === 'yesterday') {
     const now = new Date()
@@ -15,22 +49,19 @@ function getWindowBounds(window: string): { windowStart: string; windowEnd: stri
   return { windowStart: new Date(Date.now() - days * 86400000).toISOString(), windowEnd: null, days }
 }
 
+type EodRow = { report_date: string; caller_name: string; calls_made: number; positive_replies: number; calls_booked: number }
+
 export async function GET(req: NextRequest) {
   try {
     const win = new URL(req.url).searchParams.get('window') ?? '7d'
-    const { windowStart, windowEnd, days } = getWindowBounds(win)
+    const { start, end, days, prevStart, prevEnd } = getReportDateWindow(win)
+    const { windowStart, windowEnd } = getWindowBounds(win)
 
-    const prevStart = new Date(new Date(windowStart).getTime() - days * 86400000).toISOString()
-    const prevEnd = windowStart
+    const dealsPrevStart = new Date(new Date(windowStart).getTime() - days * 86400000).toISOString()
+    const dealsPrevEnd = windowStart
 
     const supabase = createSupabaseAdmin()
 
-    function applyWindow<T>(q: T, start: string, end: string | null): T {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let query = (q as any).gte('created_at', start)
-      if (end) query = query.lt('created_at', end)
-      return query
-    }
     function applyWindowDeals<T>(q: T, start: string, end: string | null): T {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let query = (q as any).gte('closed_at', start)
@@ -39,102 +70,119 @@ export async function GET(req: NextRequest) {
     }
 
     const [
-      { count: calls_made },
-      { count: prev_calls_made },
-      { count: positive_replies },
-      { count: prev_positive_replies },
-      { count: calls_booked },
-      { count: prev_calls_booked },
+      { data: eodCurrent },
+      { data: eodPrev },
       { data: dealsData },
       { data: prevDealsData },
     ] = await Promise.all([
-      applyWindow(supabase.from('call_activity').select('*', { count: 'exact', head: true }), windowStart, windowEnd),
-      supabase.from('call_activity').select('*', { count: 'exact', head: true }).gte('created_at', prevStart).lt('created_at', prevEnd),
-      applyWindow(supabase.from('call_activity').select('*', { count: 'exact', head: true }).in('outcome', ['positive', 'callback', 'booked']), windowStart, windowEnd),
-      supabase.from('call_activity').select('*', { count: 'exact', head: true }).gte('created_at', prevStart).lt('created_at', prevEnd).in('outcome', ['positive', 'callback', 'booked']),
-      applyWindow(supabase.from('bookings').select('*', { count: 'exact', head: true }), windowStart, windowEnd),
-      supabase.from('bookings').select('*', { count: 'exact', head: true }).gte('created_at', prevStart).lt('created_at', prevEnd),
+      supabase.from('eod_reports').select('report_date, caller_name, calls_made, positive_replies, calls_booked').gte('report_date', start).lte('report_date', end),
+      supabase.from('eod_reports').select('calls_made, positive_replies, calls_booked').gte('report_date', prevStart).lte('report_date', prevEnd),
       applyWindowDeals(supabase.from('deals').select('setup_amount, monthly_amount').in('status', ['paid', 'live']), windowStart, windowEnd),
-      supabase.from('deals').select('setup_amount').gte('closed_at', prevStart).lt('closed_at', prevEnd).in('status', ['paid', 'live']),
+      supabase.from('deals').select('setup_amount').gte('closed_at', dealsPrevStart).lt('closed_at', dealsPrevEnd).in('status', ['paid', 'live']),
     ])
+
+    const eodRows = (eodCurrent ?? []) as EodRow[]
+
+    const calls_made = eodRows.reduce((s, r) => s + (r.calls_made ?? 0), 0)
+    const positive_replies = eodRows.reduce((s, r) => s + (r.positive_replies ?? 0), 0)
+    const calls_booked = eodRows.reduce((s, r) => s + (r.calls_booked ?? 0), 0)
+
+    const prev_calls_made = (eodPrev ?? []).reduce((s, r) => s + (r.calls_made ?? 0), 0)
+    const prev_positive_replies = (eodPrev ?? []).reduce((s, r) => s + (r.positive_replies ?? 0), 0)
+    const prev_calls_booked = (eodPrev ?? []).reduce((s, r) => s + (r.calls_booked ?? 0), 0)
 
     const deals_closed = dealsData?.length ?? 0
     const setup_revenue = dealsData?.reduce((s, d) => s + (d.setup_amount ?? 0), 0) ?? 0
     const monthly_revenue = dealsData?.reduce((s, d) => s + (d.monthly_amount ?? 0), 0) ?? 0
     const prev_deals_closed = prevDealsData?.length ?? 0
     const prev_setup_revenue = prevDealsData?.reduce((s, d) => s + (d.setup_amount ?? 0), 0) ?? 0
-    const callsMadeNum = calls_made ?? 0
-    const callsBookedNum = calls_booked ?? 0
 
     const metrics: DashboardMetrics = {
-      calls_made: callsMadeNum,
-      positive_replies: positive_replies ?? 0,
-      calls_booked: callsBookedNum,
+      calls_made,
+      positive_replies,
+      calls_booked,
       deals_closed,
       setup_revenue,
       monthly_revenue,
-      close_rate: callsBookedNum > 0 ? deals_closed / callsBookedNum : 0,
-      book_rate: callsMadeNum > 0 ? callsBookedNum / callsMadeNum : 0,
-      prev_calls_made: prev_calls_made ?? 0,
-      prev_positive_replies: prev_positive_replies ?? 0,
-      prev_calls_booked: prev_calls_booked ?? 0,
+      close_rate: calls_booked > 0 ? deals_closed / calls_booked : 0,
+      book_rate: calls_made > 0 ? calls_booked / calls_made : 0,
+      prev_calls_made,
+      prev_positive_replies,
+      prev_calls_booked,
       prev_deals_closed,
       prev_setup_revenue,
     }
 
-    // Trend (fill all days, group by date)
-    const [{ data: rawCalls }, { data: rawBookings }, { data: rawDeals }] = await Promise.all([
-      applyWindow(supabase.from('call_activity').select('created_at'), windowStart, windowEnd),
-      applyWindow(supabase.from('bookings').select('created_at'), windowStart, windowEnd),
-      applyWindowDeals(supabase.from('deals').select('closed_at').in('status', ['paid', 'live']), windowStart, windowEnd),
-    ])
+    // ─── Trend: calls + booked from eod_reports (by report_date), closed from deals ──
+    const { data: rawDeals } = await applyWindowDeals(supabase.from('deals').select('closed_at').in('status', ['paid', 'live']), windowStart, windowEnd)
 
     const trendMap: Record<string, { calls: number; booked: number; closed: number }> = {}
-    rawCalls?.forEach(r => { const d = r.created_at.slice(0, 10); if (!trendMap[d]) trendMap[d] = { calls: 0, booked: 0, closed: 0 }; trendMap[d].calls++ })
-    rawBookings?.forEach(r => { const d = r.created_at.slice(0, 10); if (!trendMap[d]) trendMap[d] = { calls: 0, booked: 0, closed: 0 }; trendMap[d].booked++ })
-    rawDeals?.forEach(r => { const d = r.closed_at.slice(0, 10); if (!trendMap[d]) trendMap[d] = { calls: 0, booked: 0, closed: 0 }; trendMap[d].closed++ })
+    eodRows.forEach(r => {
+      const d = r.report_date
+      if (!trendMap[d]) trendMap[d] = { calls: 0, booked: 0, closed: 0 }
+      trendMap[d].calls += r.calls_made ?? 0
+      trendMap[d].booked += r.calls_booked ?? 0
+    })
+    ;(rawDeals ?? []).forEach((r: { closed_at: string }) => {
+      const d = r.closed_at.slice(0, 10)
+      if (!trendMap[d]) trendMap[d] = { calls: 0, booked: 0, closed: 0 }
+      trendMap[d].closed++
+    })
 
     const trendDays: TrendPoint[] = []
-    for (let i = days - 1; i >= 0; i--) {
-      const base = windowEnd ? new Date(new Date(windowEnd).getTime() - (i + 1) * 86400000) : new Date(Date.now() - i * 86400000)
-      const date = base.toISOString().slice(0, 10)
-      trendDays.push({ date, ...(trendMap[date] ?? { calls: 0, booked: 0, closed: 0 }) })
+    for (let d = start; ; d = addDays(d, 1)) {
+      trendDays.push({ date: d, ...(trendMap[d] ?? { calls: 0, booked: 0, closed: 0 }) })
+      if (d === end) break
     }
 
-    // Leaderboard
-    const [{ data: activityRows }, { data: bookingRows }, { data: dealRows }] = await Promise.all([
-      applyWindow(supabase.from('call_activity').select('caller_id, outcome, callers(name)'), windowStart, windowEnd),
-      applyWindow(supabase.from('bookings').select('caller_id'), windowStart, windowEnd),
-      applyWindowDeals(supabase.from('deals').select('caller_id, setup_amount').in('status', ['paid', 'live']), windowStart, windowEnd),
-    ])
+    // ─── Leaderboard: grouped by caller_name from eod_reports ──────────────────
+    const { data: dealRows } = await applyWindowDeals(
+      supabase.from('deals').select('caller_id, setup_amount, callers(name)').in('status', ['paid', 'live']),
+      windowStart,
+      windowEnd
+    )
 
     const callerMap: Record<string, CallerStats> = {}
-    activityRows?.forEach(row => {
-      const cid = row.caller_id ?? 'unknown'
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const name = (row.callers as any)?.name ?? 'Unknown'
-      if (!callerMap[cid]) callerMap[cid] = { caller_id: cid, caller_name: name, calls: 0, positives: 0, booked: 0, closed: 0, revenue: 0 }
-      callerMap[cid].calls++
-      if (['positive', 'callback', 'booked'].includes(row.outcome)) callerMap[cid].positives++
+    eodRows.forEach(r => {
+      const name = r.caller_name?.trim() || 'Unknown'
+      const key = name.toLowerCase()
+      if (!callerMap[key]) callerMap[key] = { caller_id: name, caller_name: name, calls: 0, positives: 0, booked: 0, closed: 0, revenue: 0 }
+      callerMap[key].calls += r.calls_made ?? 0
+      callerMap[key].positives += r.positive_replies ?? 0
+      callerMap[key].booked += r.calls_booked ?? 0
     })
-    bookingRows?.forEach(row => { const cid = row.caller_id ?? 'unknown'; if (callerMap[cid]) callerMap[cid].booked++ })
-    dealRows?.forEach(row => { const cid = row.caller_id ?? 'unknown'; if (callerMap[cid]) { callerMap[cid].closed++; callerMap[cid].revenue += row.setup_amount ?? 0 } })
-    const leaderboard = Object.values(callerMap).sort((a, b) => b.closed - a.closed || b.revenue - a.revenue)
+    // Best-effort revenue attribution: match a deal's caller name to an eod caller_name.
+    // (callers/deals caller_id linkage is a separate, currently-unused pipeline, so this
+    // only attaches data when the names happen to line up; otherwise closed/revenue stay 0.)
+    ;(dealRows ?? []).forEach((row: { setup_amount: number | null; callers: { name?: string } | { name?: string }[] | null }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const callerRel = row.callers as any
+      const name = (Array.isArray(callerRel) ? callerRel[0]?.name : callerRel?.name)?.trim()
+      if (!name) return
+      const key = name.toLowerCase()
+      if (!callerMap[key]) return
+      callerMap[key].closed++
+      callerMap[key].revenue += row.setup_amount ?? 0
+    })
+    const leaderboard = Object.values(callerMap).sort((a, b) => b.calls - a.calls || b.closed - a.closed || b.revenue - a.revenue)
 
-    // Recent activity
-    const [{ data: recentCalls }, { data: recentBookings }] = await Promise.all([
-      supabase.from('call_activity').select('id, outcome, created_at, caller_id, callers(name), call_leads(company)').order('created_at', { ascending: false }).limit(20),
+    // ─── Recent activity: latest EOD submissions + recent bookings ─────────────
+    const [{ data: recentEod }, { data: recentBookings }] = await Promise.all([
+      supabase.from('eod_reports').select('id, report_date, caller_name, calls_made, positive_replies, calls_booked, notes, created_at').order('report_date', { ascending: false }).order('created_at', { ascending: false }).limit(20),
       supabase.from('bookings').select('id, business_name, created_at, caller_id, callers(name)').order('created_at', { ascending: false }).limit(5),
     ])
 
     const recent: RecentActivity[] = [
-      ...(recentCalls ?? []).map(r => ({
-        id: r.id, type: 'call' as const,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        description: `${r.outcome.replace(/_/g, ' ')} — ${(r.call_leads as any)?.company ?? 'Unknown'}`,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        caller_name: (r.callers as any)?.name ?? null, created_at: r.created_at,
-      })),
+      ...(recentEod ?? []).map(r => {
+        const notesSnippet = r.notes ? `: "${r.notes.length > 60 ? r.notes.slice(0, 60) + '...' : r.notes}"` : ''
+        return {
+          id: r.id,
+          type: 'call' as const,
+          description: `EOD for ${r.report_date} - ${r.calls_made} calls, ${r.positive_replies} positives, ${r.calls_booked} booked${notesSnippet}`,
+          caller_name: r.caller_name ?? null,
+          created_at: r.created_at,
+        }
+      }),
       ...(recentBookings ?? []).map(r => ({
         id: r.id, type: 'booking' as const, description: `Booked: ${r.business_name}`,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

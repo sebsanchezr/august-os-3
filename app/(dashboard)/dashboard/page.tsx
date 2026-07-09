@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { CheckCircle2, AlertTriangle, XCircle } from 'lucide-react'
 import { KpiCard } from '@/components/kpi-card'
 import { TrendChart } from '@/components/trend-chart'
 import { LeaderboardTable } from '@/components/leaderboard-table'
@@ -22,6 +23,114 @@ const WINDOWS: { key: Window; label: string }[] = [
   { key: '7d', label: '7 days' },
   { key: '30d', label: '30 days' },
 ]
+
+const WINDOW_DAYS: Record<Window, number> = { yesterday: 1, '7d': 7, '30d': 30 }
+
+// Static B2B cold-calling benchmarks. Purely client-side, no LLM involved.
+type BenchmarkLevel = 'green' | 'amber' | 'red' | 'neutral'
+
+interface Benchmark {
+  label: string
+  value: string
+  target: string
+  level: BenchmarkLevel
+  hint: string
+}
+
+function levelFor(value: number, target: number): BenchmarkLevel {
+  if (value >= target) return 'green'
+  if (value >= target * 0.6) return 'amber'
+  return 'red'
+}
+
+function computeBenchmarks(m: DashboardMetrics, leaderboard: CallerStats[], windowDays: number): Benchmark[] {
+  const positiveRate = m.calls_made > 0 ? (m.positive_replies / m.calls_made) * 100 : 0
+  const bookRate = m.calls_made > 0 ? (m.calls_booked / m.calls_made) * 100 : 0
+
+  const benchmarks: Benchmark[] = []
+
+  if (m.calls_made > 0) {
+    const level = levelFor(positiveRate, 5)
+    benchmarks.push({
+      label: 'Positive conversation rate',
+      value: `${positiveRate.toFixed(1)}%`,
+      target: '5-10%',
+      level,
+      hint:
+        level === 'green'
+          ? 'Healthy conversation rate, script and targeting are working.'
+          : level === 'amber'
+            ? 'Below the 5-10% benchmark, tighten targeting or refresh the opener.'
+            : 'Well below benchmark, review script, list quality and objection handling.',
+    })
+
+    const bookLevel = levelFor(bookRate, 1)
+    benchmarks.push({
+      label: 'Booking rate',
+      value: `${bookRate.toFixed(1)}%`,
+      target: '1-3%',
+      level: bookLevel,
+      hint:
+        bookLevel === 'green'
+          ? 'Booking rate is on target, calls are converting to meetings.'
+          : bookLevel === 'amber'
+            ? 'Below the 1-3% benchmark, tighten the close on the call.'
+            : 'Well below benchmark, review the booking ask and offer positioning.',
+    })
+  } else {
+    benchmarks.push(
+      { label: 'Positive conversation rate', value: '-', target: '5-10%', level: 'neutral', hint: 'No calls logged in this window yet.' },
+      { label: 'Booking rate', value: '-', target: '1-3%', level: 'neutral', hint: 'No calls logged in this window yet.' }
+    )
+  }
+
+  const activeCallers = leaderboard.filter(c => c.calls > 0).length
+  if (activeCallers > 0) {
+    const callsPerCallerPerDay = m.calls_made / activeCallers / windowDays
+    benchmarks.push({
+      label: 'Calls per caller per day',
+      value: callsPerCallerPerDay.toFixed(0),
+      target: '30+',
+      level: levelFor(callsPerCallerPerDay, 30),
+      hint:
+        callsPerCallerPerDay >= 30
+          ? 'Dial volume is where it needs to be.'
+          : callsPerCallerPerDay >= 18
+            ? 'Below the 30/day benchmark, dial volume is leaving pipeline on the table.'
+            : 'Well below the 30/day benchmark, prioritise dial time over admin work.',
+    })
+  } else {
+    benchmarks.push({ label: 'Calls per caller per day', value: '-', target: '30+', level: 'neutral', hint: 'No EOD submissions in this window yet.' })
+  }
+
+  return benchmarks
+}
+
+const levelStyles: Record<BenchmarkLevel, { icon: typeof CheckCircle2; color: string }> = {
+  green: { icon: CheckCircle2, color: 'text-green-400' },
+  amber: { icon: AlertTriangle, color: 'text-amber-400' },
+  red: { icon: XCircle, color: 'text-red-400' },
+  neutral: { icon: CheckCircle2, color: 'text-[#636780]' },
+}
+
+function BenchmarkRow({ benchmark }: { benchmark: Benchmark }) {
+  const { icon: Icon, color } = levelStyles[benchmark.level]
+  return (
+    <div className="flex items-start gap-3 py-3 border-b border-[#1c2035] last:border-0">
+      <Icon size={16} className={`mt-0.5 flex-shrink-0 ${color}`} />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-sm text-[#e4e6f0] font-medium">{benchmark.label}</p>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <span className={`text-sm font-mono tabular-nums ${color}`}>{benchmark.value}</span>
+            <span className="text-[10px] text-[#636780]">target {benchmark.target}</span>
+          </div>
+        </div>
+        <p className="text-xs text-[#636780] mt-1">{benchmark.hint}</p>
+      </div>
+    </div>
+  )
+}
 
 function Skeleton({ className = '' }: { className?: string }) {
   return <div className={`animate-pulse bg-[#181b27] rounded-lg ${className}`} />
@@ -105,6 +214,21 @@ export default function DashboardPage() {
           <KpiCard label="Closed" value={m.deals_closed} change={pctChange(m.deals_closed, m.prev_deals_closed)} compact accent="green" />
           <KpiCard label="Revenue" value={`£${m.setup_revenue.toLocaleString()}`} change={pctChange(m.setup_revenue, m.prev_setup_revenue)} compact accent="green" />
           <KpiCard label="Close %" value={`${(m.close_rate * 100).toFixed(1)}%`} compact accent="blue" />
+        </div>
+      ) : null}
+
+      {/* Benchmarks */}
+      {loading ? (
+        <Skeleton className="h-40 rounded-xl border border-[#1c2035] mb-4" />
+      ) : m && data ? (
+        <div className="rounded-xl border border-[#1c2035] bg-[#10121a] p-5 mb-4">
+          <p className="text-sm font-medium text-[#e4e6f0] mb-2">Benchmarks</p>
+          <p className="text-xs text-[#636780] mb-2">Against typical B2B cold-calling benchmarks for this window</p>
+          <div>
+            {computeBenchmarks(m, data.leaderboard, WINDOW_DAYS[activeWindow]).map(b => (
+              <BenchmarkRow key={b.label} benchmark={b} />
+            ))}
+          </div>
         </div>
       ) : null}
 

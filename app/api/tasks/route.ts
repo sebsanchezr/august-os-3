@@ -54,7 +54,32 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ tasks: data ?? [] })
+
+  const tasks = await attachCollaboratorProfiles(supabase, data ?? [])
+  return NextResponse.json({ tasks })
+}
+
+// Best-effort join: collaborator_ids is a plain uuid[] column (no FK relation
+// Supabase can embed), so collaborator profiles are fetched in a second
+// lightweight lookup and attached as `collaborator_profiles`. Degrades to an
+// empty list if the column does not exist yet (pre-migration 031).
+async function attachCollaboratorProfiles<T extends { collaborator_ids?: string[] | null }>(
+  supabase: ReturnType<typeof createSupabaseAdmin>,
+  tasks: T[]
+): Promise<T[]> {
+  const allIds = Array.from(new Set(tasks.flatMap((t) => t.collaborator_ids ?? [])))
+  if (allIds.length === 0) return tasks.map((t) => ({ ...t, collaborator_profiles: [] }))
+
+  const { data: collabProfiles } = await supabase
+    .from('profiles')
+    .select('id, name, role')
+    .in('id', allIds)
+
+  const byId = new Map((collabProfiles ?? []).map((p) => [p.id, p]))
+  return tasks.map((t) => ({
+    ...t,
+    collaborator_profiles: (t.collaborator_ids ?? []).map((id) => byId.get(id)).filter(Boolean),
+  }))
 }
 
 // POST /api/tasks
@@ -92,29 +117,42 @@ export async function POST(req: NextRequest) {
   const now = new Date().toISOString()
   const completedAt = isTerminalStatus(status) ? now : null
 
-  const { data: task, error: insertErr } = await supabase
+  const insertPayload: Record<string, unknown> = {
+    title: (body.title as string).trim(),
+    description: (body.description as string) || '',
+    track,
+    department,
+    client_id: body.client_id || null,
+    assignee_id: body.assignee_id || null,
+    created_by: body.created_by || null,
+    status,
+    priority,
+    due_date: body.due_date || null,
+    blocked_reason: body.blocked_reason || null,
+    source,
+    meeting_ref: body.meeting_ref || null,
+    recurrence: body.recurrence || null,
+    tags: body.tags || [],
+    position: body.position || 0,
+    completed_at: completedAt,
+    collaborator_ids: Array.isArray(body.collaborator_ids) ? body.collaborator_ids : [],
+  }
+
+  let { data: task, error: insertErr } = await supabase
     .from('tasks')
-    .insert({
-      title: (body.title as string).trim(),
-      description: (body.description as string) || '',
-      track,
-      department,
-      client_id: body.client_id || null,
-      assignee_id: body.assignee_id || null,
-      created_by: body.created_by || null,
-      status,
-      priority,
-      due_date: body.due_date || null,
-      blocked_reason: body.blocked_reason || null,
-      source,
-      meeting_ref: body.meeting_ref || null,
-      recurrence: body.recurrence || null,
-      tags: body.tags || [],
-      position: body.position || 0,
-      completed_at: completedAt,
-    })
+    .insert(insertPayload)
     .select()
     .single()
+
+  // Column not migrated yet: retry without collaborator_ids.
+  if (insertErr?.code === '42703') {
+    const { collaborator_ids: _omit, ...withoutCollaborators } = insertPayload
+    ;({ data: task, error: insertErr } = await supabase
+      .from('tasks')
+      .insert(withoutCollaborators)
+      .select()
+      .single())
+  }
 
   if (insertErr || !task) return NextResponse.json({ error: insertErr?.message ?? 'Insert failed' }, { status: 500 })
 

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdmin } from '@/lib/supabase-server'
 
+export const dynamic = 'force-dynamic'
+
 // GET /api/accounts/[id]
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   const supabase = createSupabaseAdmin()
@@ -21,7 +23,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     .eq('client_id', id)
     .is('deleted_at', null)
     .is('archived_at', null)
-    .not('status', 'in', '("done","live")')
+    .not('status', 'in', '("completed","live")')
     .order('due_date', { ascending: true, nullsFirst: false })
 
   // Open issues

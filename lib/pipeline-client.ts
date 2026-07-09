@@ -38,6 +38,11 @@ export async function updatePipelineDeal(id: string, patch: Partial<PipelineDeal
   return json.deal
 }
 
+export async function deletePipelineDeal(id: string): Promise<void> {
+  const res = await fetch(`${PIPELINE_BASE}/${id}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error('Failed to delete pipeline deal')
+}
+
 export async function fetchAcquisition(window: '7d' | '30d' | 'qtd' = '7d'): Promise<AcquisitionRollup> {
   const res = await fetch(`/api/acquisition?window=${window}`, { cache: 'no-store' })
   if (!res.ok) throw new Error('Failed to load acquisition rollup')

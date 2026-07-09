@@ -2,12 +2,13 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Rocket } from 'lucide-react'
+import { Rocket, Plus } from 'lucide-react'
 import { KpiCard } from '@/components/kpi-card'
 import StartOnboardingModal from '@/components/onboarding/start-onboarding-modal'
 import PipelineDealDrawer from '@/components/pipeline-deal-drawer'
 import { fetchPipeline, updatePipelineDeal } from '@/lib/pipeline-client'
 import { fetchOnboardings } from '@/lib/onboarding-client'
+import { SOURCE_CHANNELS } from '@/lib/pipeline-constants'
 import { ONBOARDING_STATUS_LABELS } from '@/lib/types'
 import type { PipelineDeal, PipelineStage, SourceChannel, Onboarding } from '@/lib/types'
 
@@ -22,15 +23,7 @@ const STAGES: { key: PipelineStage; label: string; accent: string }[] = [
   { key: 'lost',           label: 'Lost',           accent: 'border-l-red-500' },
 ]
 
-const CHANNELS: { key: SourceChannel; label: string }[] = [
-  { key: 'cold_call',  label: 'Cold Call' },
-  { key: 'cold_email', label: 'Cold Email' },
-  { key: 'linkedin',   label: 'LinkedIn' },
-  { key: 'gov',        label: 'Gov' },
-  { key: 'referral',   label: 'Referral' },
-  { key: 'expansion',  label: 'Expansion' },
-  { key: 'other',      label: 'Other' },
-]
+const CHANNELS: { key: SourceChannel; label: string }[] = SOURCE_CHANNELS.map((c) => ({ key: c.value, label: c.label }))
 
 function formatMoney(amount: number, currency = 'GBP'): string {
   return new Intl.NumberFormat('en-GB', { style: 'currency', currency, maximumFractionDigits: 0 }).format(amount)
@@ -51,6 +44,7 @@ export default function PipelinePage() {
   const [movingId, setMovingId] = useState<string | null>(null)
   const [onboardingModalDeal, setOnboardingModalDeal] = useState<PipelineDeal | null>(null)
   const [editingDeal, setEditingDeal] = useState<PipelineDeal | null>(null)
+  const [addingDeal, setAddingDeal] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
 
   async function load() {
@@ -131,16 +125,24 @@ export default function PipelinePage() {
           <h1 className="text-xl font-semibold text-[#e4e6f0]">Pipeline</h1>
           <p className="text-xs text-[#636780] mt-1">Cross-channel prospect pipeline, all sources in one board</p>
         </div>
-        <select
-          value={channelFilter}
-          onChange={(e) => setChannelFilter(e.target.value as SourceChannel | 'all')}
-          className="bg-[#10121a] border border-[#1c2035] rounded-lg px-3 py-1.5 text-xs text-[#e4e6f0]"
-        >
-          <option value="all">All channels</option>
-          {CHANNELS.map((c) => (
-            <option key={c.key} value={c.key}>{c.label}</option>
-          ))}
-        </select>
+        <div className="flex items-center gap-3">
+          <select
+            value={channelFilter}
+            onChange={(e) => setChannelFilter(e.target.value as SourceChannel | 'all')}
+            className="bg-[#10121a] border border-[#1c2035] rounded-lg px-3 py-1.5 text-xs text-[#e4e6f0]"
+          >
+            <option value="all">All channels</option>
+            {CHANNELS.map((c) => (
+              <option key={c.key} value={c.key}>{c.label}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => setAddingDeal(true)}
+            className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" /> Add Deal
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -240,8 +242,15 @@ export default function PipelinePage() {
 
       <PipelineDealDrawer
         deal={editingDeal}
-        onClose={() => setEditingDeal(null)}
-        onSaved={(updated) => setDeals((prev) => prev.map((d) => (d.id === updated.id ? updated : d)))}
+        creating={addingDeal}
+        onClose={() => {
+          setEditingDeal(null)
+          setAddingDeal(false)
+        }}
+        onSaved={(updated, isNew) =>
+          setDeals((prev) => (isNew ? [updated, ...prev] : prev.map((d) => (d.id === updated.id ? updated : d))))
+        }
+        onDeleted={(id) => setDeals((prev) => prev.filter((d) => d.id !== id))}
       />
 
       {onboardingModalDeal && (

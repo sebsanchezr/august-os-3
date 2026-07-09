@@ -1,8 +1,45 @@
 import { NextResponse } from 'next/server'
-import { createSupabaseAdmin } from '@/lib/supabase-server'
+import { createLeadPipelineAdmin } from '@/lib/supabase-server'
+
+// The LinkedIn Ghost engine (lead_pipeline/scripts/linkedin) writes leads,
+// lead_activities and reply_conversations into the separate lead_pipeline
+// Supabase project, not the OS project. This route must read from that
+// project via createLeadPipelineAdmin(), which needs LEAD_PIPELINE_SUPABASE_URL
+// and LEAD_PIPELINE_SUPABASE_SERVICE_KEY set. If they are not set, return a
+// zeroed, clearly-flagged payload instead of crashing the page.
+function emptyStats(configured: boolean, errors?: string[]) {
+  return NextResponse.json({
+    configured,
+    kpis: {
+      connects_sent_total: 0,
+      connects_sent_7d: 0,
+      acceptance_rate: 0,
+      reply_rate: 0,
+      approvals_pending: 0,
+    },
+    pipeline: [],
+    conversations: [],
+    weekly_sends: [],
+    ...(errors && errors.length ? { errors } : {}),
+  })
+}
 
 export async function GET() {
-  const supabase = createSupabaseAdmin()
+  let supabase
+  try {
+    supabase = createLeadPipelineAdmin()
+  } catch (err) {
+    console.error('[linkedin/stats] lead pipeline client not configured', err)
+    return emptyStats(false)
+  }
+
+  const errors: string[] = []
+  const track = (label: string, error: { message: string } | null) => {
+    if (error) {
+      console.error(`[linkedin/stats] ${label}`, error)
+      errors.push(`${label}: ${error.message}`)
+    }
+  }
 
   const now = new Date()
   const sevenDaysAgo = new Date(now)
@@ -10,13 +47,17 @@ export async function GET() {
   const sixtyDaysAgo = new Date(now)
   sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60)
 
-  // Fetch all linkedin lead_activities in one shot
-  const { data: allActivities } = await supabase
+  // Fetch all linkedin lead_activities in one shot. event_type values here
+  // must match what ghost_supabase.log_activity()/run_ghost.py actually write:
+  // connection_sent, connection_accepted, dm_step_{n}_sent, reply_received,
+  // dm_approval_pending, replied, withdrawn.
+  const { data: allActivities, error: activitiesError } = await supabase
     .from('lead_activities')
     .select('id, lead_id, event_type, occurred_at, detail')
     .eq('channel', 'linkedin')
     .gte('occurred_at', sixtyDaysAgo.toISOString())
     .order('occurred_at', { ascending: false })
+  track('lead_activities', activitiesError)
 
   const activities = allActivities ?? []
 
@@ -62,10 +103,11 @@ export async function GET() {
 
   let pipelineLeads: any[] = []
   if (acceptedLeadIds.length > 0) {
-    const { data: leadsData } = await supabase
+    const { data: leadsData, error: leadsError } = await supabase
       .from('leads')
       .select('id, first_name, last_name, company_name, job_title, industry, linkedin_url, lead_score, niche, status')
       .in('id', acceptedLeadIds)
+    track('leads (pipeline)', leadsError)
 
     const leadsMap = new Map((leadsData ?? []).map((l) => [l.id, l]))
 
@@ -106,11 +148,12 @@ export async function GET() {
   }
 
   // --- Conversations from reply_conversations ---
-  const { data: convData } = await supabase
+  const { data: convData, error: convError } = await supabase
     .from('reply_conversations')
     .select('id, lead_id, classification, state, next_action, updated_at')
     .order('updated_at', { ascending: false })
     .limit(50)
+  track('reply_conversations', convError)
 
   const convs = convData ?? []
 
@@ -118,10 +161,11 @@ export async function GET() {
   const convLeadIds = [...new Set(convs.map((c) => c.lead_id).filter(Boolean))]
   let convLeadsMap = new Map<string, any>()
   if (convLeadIds.length > 0) {
-    const { data: convLeadsData } = await supabase
+    const { data: convLeadsData, error: convLeadsError } = await supabase
       .from('leads')
       .select('id, first_name, last_name, company_name')
       .in('id', convLeadIds)
+    track('leads (conversations)', convLeadsError)
     for (const l of convLeadsData ?? []) {
       convLeadsMap.set(l.id, l)
     }
@@ -175,6 +219,7 @@ export async function GET() {
     .map(([week, count]) => ({ week, count }))
 
   return NextResponse.json({
+    configured: true,
     kpis: {
       connects_sent_total,
       connects_sent_7d,
@@ -185,5 +230,6 @@ export async function GET() {
     pipeline: pipelineLeads,
     conversations,
     weekly_sends,
+    ...(errors.length ? { errors } : {}),
   })
 }

@@ -9,6 +9,7 @@ import AccountModals, { type ModalKind } from './account-modals'
 import ReportView from './report-view'
 import ReportHistory from './report-history'
 import PastMeetings from './past-meetings'
+import AssetsTab from './assets-tab'
 import type { Client, ClientIssue, ClientReport, ClientMeeting, ClientMetricsDaily } from '@/lib/types'
 
 const HEALTH_COLOUR: Record<string, string> = {
@@ -51,7 +52,7 @@ type AccountData = {
   }>
 }
 
-type TabId = 'overview' | 'report' | 'meetings' | 'reports' | 'settings'
+type TabId = 'overview' | 'assets' | 'report' | 'meetings' | 'reports' | 'settings'
 
 export default function AccountHQ({ accountId }: { accountId: string }) {
   const [data, setData] = useState<AccountData | null>(null)
@@ -115,11 +116,6 @@ export default function AccountHQ({ accountId }: { accountId: string }) {
             <h1 className="text-[#e4e6f0] font-semibold text-xl">{account.name}</h1>
             <p className="text-[#636780] text-xs mt-0.5">
               {account.am ? `AM: ${account.am.name}` : 'No AM assigned'}
-              {account.mrr != null && (
-                <span className="ml-3">
-                  {new Intl.NumberFormat('en-GB', { style: 'currency', currency: account.currency || 'GBP', minimumFractionDigits: 0 }).format(account.mrr)}/mo
-                </span>
-              )}
             </p>
           </div>
         </div>
@@ -160,6 +156,7 @@ export default function AccountHQ({ accountId }: { accountId: string }) {
       <div className="flex items-center gap-1 border-b border-[#1c2035] mb-5">
         {([
           ['overview', 'Overview'],
+          ['assets', 'Assets'],
           ['report', 'Weekly Report'],
           ['meetings', 'Past Meetings'],
           ['reports', 'History'],
@@ -312,6 +309,11 @@ export default function AccountHQ({ accountId }: { accountId: string }) {
         </div>
       )}
 
+      {/* Assets tab */}
+      {tab === 'assets' && (
+        <AssetsTab clientId={accountId} />
+      )}
+
       {/* Past meetings tab */}
       {tab === 'meetings' && (
         <PastMeetings clientId={accountId} />
@@ -417,6 +419,7 @@ function SettingsForm({ account, onSaved }: SettingsFormProps) {
     notes:              account.notes ?? '',
     name:               account.name,
     status:             account.status,
+    health:             account.health,
   })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -437,6 +440,7 @@ function SettingsForm({ account, onSaved }: SettingsFormProps) {
       const patch: Partial<Client> = {
         name:               form.name,
         status:             form.status as Client['status'],
+        health:             form.health as Client['health'],
         contact_name:       form.contact_name || null,
         contact_email:      form.contact_email || null,
         wa_group_name:      form.wa_group_name || null,
@@ -476,6 +480,16 @@ function SettingsForm({ account, onSaved }: SettingsFormProps) {
               <option value="paused">Paused</option>
               <option value="churned">Churned</option>
             </select>
+          </Field>
+          <Field label="Health" hint="Drives the health dot on the accounts grid">
+            <div className="flex items-center gap-2">
+              <Circle size={10} className={`fill-current shrink-0 ${HEALTH_COLOUR[form.health] ?? HEALTH_COLOUR.green}`} />
+              <select className={INPUT} {...field('health')}>
+                <option value="green">Green</option>
+                <option value="amber">Amber</option>
+                <option value="red">Red</option>
+              </select>
+            </div>
           </Field>
           <Field label="Contact name">
             <input className={INPUT} placeholder="e.g. Alex" {...field('contact_name')} />

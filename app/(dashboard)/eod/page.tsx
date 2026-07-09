@@ -45,6 +45,7 @@ export default function EodPage() {
   const [showModal, setShowModal] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  const [noteReport, setNoteReport] = useState<EodReport | null>(null)
 
   const [form, setForm] = useState({
     report_date: new Date().toISOString().slice(0, 10),
@@ -179,7 +180,13 @@ export default function EodPage() {
                       <td className="px-4 py-3"><PctBadge value={pct(r.positive_replies, r.calls_made)} /></td>
                       <td className="px-4 py-3 text-sm font-mono tabular-nums text-[#e4e6f0]">{r.calls_booked}</td>
                       <td className="px-4 py-3"><PctBadge value={pct(r.calls_booked, r.calls_made)} /></td>
-                      <td className="px-4 py-3 text-xs text-[#636780] max-w-[200px] truncate">{r.notes ?? '—'}</td>
+                      <td
+                        className={`px-4 py-3 text-xs text-[#636780] max-w-[200px] truncate ${r.notes ? 'cursor-pointer hover:text-[#e4e6f0] hover:underline' : ''}`}
+                        title={r.notes ?? undefined}
+                        onClick={() => r.notes && setNoteReport(r)}
+                      >
+                        {r.notes ?? '—'}
+                      </td>
                     </tr>
                   )
                 })}
@@ -309,6 +316,27 @@ export default function EodPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Note detail modal */}
+      {noteReport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setNoteReport(null)} />
+          <div className="relative w-full max-w-md bg-[#10121a] border border-[#1c2035] rounded-2xl shadow-2xl animate-fade-in">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#1c2035]">
+              <div>
+                <h2 className="text-base font-semibold text-[#e4e6f0]">Note</h2>
+                <p className="text-xs text-[#636780] mt-0.5">{noteReport.caller_name} - {formatDate(noteReport.report_date)}</p>
+              </div>
+              <button onClick={() => setNoteReport(null)} className="text-[#636780] hover:text-[#e4e6f0] transition-colors p-1 rounded-lg hover:bg-[#181b27]">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="px-6 py-5">
+              <p className="text-sm text-[#e4e6f0] whitespace-pre-wrap">{noteReport.notes}</p>
+            </div>
           </div>
         </div>
       )}

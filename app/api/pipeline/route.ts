@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdmin } from '@/lib/supabase-server'
+import { VALID_CHANNELS } from '@/lib/pipeline-constants'
 
 export const dynamic = 'force-dynamic'
 
-const VALID_CHANNELS = ['cold_call', 'cold_email', 'linkedin', 'gov', 'referral', 'expansion', 'other'] as const
 const VALID_STAGES = ['new', 'contacted', 'positive_reply', 'booked', 'showed', 'proposal', 'won', 'lost'] as const
 
 // GET /api/pipeline?stage=&channel=

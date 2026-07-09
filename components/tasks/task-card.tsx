@@ -14,6 +14,7 @@ type Props = {
 
 export default function TaskCard({ task, onClick, onDragStart, dragging }: Props) {
   const assignee = task.profiles
+  const collaborators = task.collaborator_profiles ?? []
   const due = formatDue(task.due_date)
 
   return (
@@ -54,18 +55,29 @@ export default function TaskCard({ task, onClick, onDragStart, dragging }: Props
         )}
       </div>
 
-      {/* Bottom row: assignee avatar + due date */}
+      {/* Bottom row: assignee + collaborator avatars, stacked, + due date */}
       <div className="flex items-center justify-between">
-        {assignee ? (
-          <span
-            className={`h-5 w-5 rounded-full flex items-center justify-center text-[9px] font-semibold ${avatarColour(assignee.name)}`}
-            title={assignee.name}
-          >
-            {initials(assignee.name)}
-          </span>
-        ) : (
-          <span className="h-5 w-5 rounded-full border border-dashed border-[#2e3050]" title="Unassigned" />
-        )}
+        <div className="flex items-center -space-x-1.5">
+          {assignee ? (
+            <span
+              className={`h-5 w-5 rounded-full flex items-center justify-center text-[9px] font-semibold ring-2 ring-[#181b27] ${avatarColour(assignee.name)}`}
+              title={assignee.name}
+            >
+              {initials(assignee.name)}
+            </span>
+          ) : (
+            <span className="h-5 w-5 rounded-full border border-dashed border-[#2e3050] ring-2 ring-[#181b27]" title="Unassigned" />
+          )}
+          {collaborators.map((c) => (
+            <span
+              key={c.id}
+              className={`h-5 w-5 rounded-full flex items-center justify-center text-[9px] font-semibold ring-2 ring-[#181b27] ${avatarColour(c.name)}`}
+              title={c.name}
+            >
+              {initials(c.name)}
+            </span>
+          ))}
+        </div>
 
         {due && (
           <span className={`text-[10px] font-medium tabular-nums ${DUE_TONE_CLASS[due.tone]}`}>

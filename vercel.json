@@ -3,8 +3,11 @@
   "crons": [
     { "path": "/api/cron/invoice-reminders", "schedule": "0 8 * * *" },
     { "path": "/api/cron/upwork-search", "schedule": "0 9 * * 1-5" },
-    { "path": "/api/cron/calendar-sync", "schedule": "0 6 * * 1" },
+    { "path": "/api/cron/calendar-sync", "schedule": "0 6 * * *" },
     { "path": "/api/cron/report-approvals", "schedule": "0 9 * * *" },
-    { "path": "/api/cron/metrics-staleness", "schedule": "0 10 * * *" }
+    { "path": "/api/cron/metrics-staleness", "schedule": "0 10 * * *" },
+    { "path": "/api/cron/instantly-sync", "schedule": "30 6 * * *" },
+    { "path": "/api/cron/meta-sync", "schedule": "45 5 * * *" },
+    { "path": "/api/cron/daily-digest", "schedule": "0 7 * * *" }
   ]
 }

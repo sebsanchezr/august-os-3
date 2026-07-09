@@ -216,6 +216,16 @@ export type ClientMetricsDaily = {
   updated_at: string
 }
 
+export type ClientCreativeAsset = {
+  id: string
+  client_id: string
+  title: string
+  kind: string
+  url: string | null
+  notes: string | null
+  created_at: string
+}
+
 export const CLIENT_ISSUE_CATEGORY_LABELS: Record<ClientIssueCategory, string> = {
   financial_reporting: 'Financial / Reporting',
   performance:         'Performance',
@@ -256,10 +266,13 @@ export type Task = {
   deleted_at: string | null
   created_at: string
   updated_at: string
+  // media buyer + other tags alongside the single assignee (migration 031)
+  collaborator_ids?: string[]
   // joined
   profiles?: Pick<Profile, 'id' | 'name' | 'role'>
   creator?: Pick<Profile, 'id' | 'name'>
   clients?: Pick<Client, 'id' | 'name' | 'status'>
+  collaborator_profiles?: Pick<Profile, 'id' | 'name' | 'role'>[]
 }
 
 export type TaskComment = {
@@ -347,7 +360,7 @@ export type RecentActivity = { id: string; type: 'call' | 'booking' | 'deal'; de
 
 // Acquisition Command Center + cross-channel pipeline types
 
-export type SourceChannel = 'cold_call' | 'cold_email' | 'linkedin' | 'gov' | 'upwork' | 'referral' | 'expansion' | 'other'
+export type SourceChannel = 'cold_call' | 'cold_email' | 'linkedin' | 'gov' | 'referral' | 'expansion' | 'instagram' | 'networking' | 'other'
 
 // Upwork acquisition channel
 
@@ -642,7 +655,7 @@ export type SalesCall = {
 }
 
 // ─── OS Updates (team changelog) ───────────────────────────────────────────────
-export type OsUpdateTag = 'New' | 'Fix' | 'Building' | 'Improved'
+export type OsUpdateTag = 'New' | 'Fix' | 'Building' | 'Improved' | 'Digest'
 
 export type OsUpdate = {
   id: string

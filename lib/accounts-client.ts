@@ -1,7 +1,7 @@
 // Client-side fetch helpers for the Accounts module.
 // Mirrors the pattern in lib/tasks-client.ts.
 
-import type { Client, ClientReport, ClientIssue, ClientCommsLog, ClientMeeting, TeamQuestion } from './types'
+import type { Client, ClientReport, ClientIssue, ClientCommsLog, ClientMeeting, TeamQuestion, OnboardingForm, ClientCreativeAsset, Task, Profile } from './types'
 
 const BASE = '/api/accounts'
 
@@ -22,7 +22,7 @@ export async function fetchAccounts(): Promise<AccountListItem[]> {
 }
 
 export async function fetchAccount(id: string) {
-  const res = await fetch(`${BASE}/${id}`)
+  const res = await fetch(`${BASE}/${id}`, { cache: 'no-store' })
   if (!res.ok) throw new Error('Failed to load account')
   return res.json()
 }
@@ -61,6 +61,25 @@ export async function deleteAccount(id: string): Promise<void> {
     const { error } = await res.json().catch(() => ({ error: 'Unknown error' }))
     throw new Error(error)
   }
+}
+
+// ─── Assets tab ───────────────────────────────────────────────────────────────
+
+export type AssetsTabData = {
+  notes: string | null
+  form: OnboardingForm | null
+  assets: ClientCreativeAsset[]
+  tasks: (Pick<Task, 'id' | 'title' | 'priority' | 'due_date' | 'completed_at' | 'track' | 'assignee_id'> & {
+    // DB status vocabulary is broader than the kanban TaskStatus enum (e.g. 'this_week', 'done')
+    status: string
+    profiles?: Pick<Profile, 'id' | 'name'> | null
+  })[]
+}
+
+export async function fetchAssetsTab(clientId: string): Promise<AssetsTabData> {
+  const res = await fetch(`${BASE}/${clientId}/assets`, { cache: 'no-store' })
+  if (!res.ok) throw new Error('Failed to load assets')
+  return res.json()
 }
 
 // ─── Reports ──────────────────────────────────────────────────────────────────

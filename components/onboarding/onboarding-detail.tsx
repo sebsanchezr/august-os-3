@@ -16,10 +16,12 @@ export default function OnboardingDetail({
   onboarding,
   onClose,
   onUpdated,
+  canSeeFee,
 }: {
   onboarding: Onboarding
   onClose: () => void
   onUpdated: (updated: Onboarding) => void
+  canSeeFee: boolean
 }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -107,9 +109,11 @@ export default function OnboardingDetail({
               onboarding.health === 'red' ? 'bg-red-500' : onboarding.health === 'amber' ? 'bg-amber-500' : 'bg-green-500'
             }`}
           />
-          <span className="text-xs text-green-400 tabular-nums ml-auto">
-            {formatCurrency(onboarding.fee_amount, onboarding.currency)}
-          </span>
+          {canSeeFee && (
+            <span className="text-xs text-green-400 tabular-nums ml-auto">
+              {formatCurrency(onboarding.fee_amount, onboarding.currency)}
+            </span>
+          )}
         </div>
 
         <Section title="Contact">

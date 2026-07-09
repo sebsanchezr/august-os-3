@@ -29,6 +29,7 @@ export default function QuickAdd({ track, profiles, clients, createdBy, autoFocu
   const [expanded, setExpanded] = useState(false)
   const [title, setTitle] = useState('')
   const [assignee, setAssignee] = useState('')
+  const [collaboratorIds, setCollaboratorIds] = useState<string[]>([])
   const [clientId, setClientId] = useState('')
   const [department, setDepartment] = useState<TaskDepartment>(track === 'creative' ? 'creative' : 'paid_ads')
   const [priority, setPriority] = useState<TaskPriority>('normal')
@@ -36,6 +37,10 @@ export default function QuickAdd({ track, profiles, clients, createdBy, autoFocu
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  function toggleCollaborator(id: string) {
+    setCollaboratorIds((prev) => (prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]))
+  }
 
   useEffect(() => {
     if (autoFocusSignal > 0) {
@@ -48,11 +53,17 @@ export default function QuickAdd({ track, profiles, clients, createdBy, autoFocu
   function reset() {
     setTitle('')
     setAssignee('')
+    setCollaboratorIds([])
     setClientId('')
     setDepartment(track === 'creative' ? 'creative' : 'paid_ads')
     setPriority('normal')
     setDueDate('')
     setError(null)
+  }
+
+  function selectAssignee(id: string) {
+    setAssignee(id)
+    setCollaboratorIds((prev) => prev.filter((c) => c !== id))
   }
 
   async function submit() {
@@ -68,6 +79,7 @@ export default function QuickAdd({ track, profiles, clients, createdBy, autoFocu
         status: defaultStatus,
         priority,
         assignee_id: assignee || null,
+        collaborator_ids: collaboratorIds,
         client_id: clientId || null,
         due_date: dueDate || null,
         created_by: createdBy,
@@ -131,7 +143,7 @@ export default function QuickAdd({ track, profiles, clients, createdBy, autoFocu
 
       {/* Inline selectors */}
       <div className="flex items-center gap-1.5 flex-wrap mt-2">
-        <select value={assignee} onChange={(e) => setAssignee(e.target.value)} className={selectClass}>
+        <select value={assignee} onChange={(e) => selectAssignee(e.target.value)} className={selectClass}>
           <option value="">Assignee</option>
           {profiles.map((p) => (
             <option key={p.id} value={p.id}>{p.name}</option>
@@ -175,6 +187,27 @@ export default function QuickAdd({ track, profiles, clients, createdBy, autoFocu
           {saving ? 'Adding...' : 'Add'}
         </button>
       </div>
+
+      {/* Collaborators: media buyer + anyone else who needs to be tagged alongside the assignee */}
+      {profiles.filter((p) => p.id !== assignee).length > 0 && (
+        <div className="flex items-center gap-1.5 flex-wrap mt-2">
+          <span className="text-[10px] text-[#3d4060]">Collaborators:</span>
+          {profiles.filter((p) => p.id !== assignee).map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => toggleCollaborator(p.id)}
+              className={`text-[10px] font-medium rounded-full px-2 py-0.5 transition-colors ${
+                collaboratorIds.includes(p.id)
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-[#181b27] text-[#636780] border border-[#1c2035] hover:text-[#e4e6f0]'
+              }`}
+            >
+              {p.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       {error && <p className="text-[11px] text-rose-400 mt-1.5">{error}</p>}
     </div>

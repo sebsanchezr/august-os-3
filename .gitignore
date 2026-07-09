@@ -6,3 +6,4 @@ out/
 *.pem
 .vercel
 .env*
+CLAUDE.md

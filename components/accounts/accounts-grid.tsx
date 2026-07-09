@@ -215,20 +215,25 @@ export default function AccountsGrid() {
               </div>
             </div>
 
-            {/* MRR */}
-            {account.mrr != null && (
-              <p className="text-[#e4e6f0] text-sm font-semibold mb-3">
-                {fmt(account.mrr, account.currency)}<span className="text-[#636780] text-xs font-normal">/mo</span>
-              </p>
-            )}
-
-            {/* 7d metrics */}
-            {account.metrics_7d && (
+            {/* 7d metrics: always render, uniform across all clients */}
+            {!account.meta_ad_account_id ? (
               <div className="grid grid-cols-3 gap-2 mb-3">
-                <Metric label="7d Spend" value={fmt(account.metrics_7d.spend, account.currency)} />
-                <Metric label="7d Revenue" value={fmt(account.metrics_7d.revenue, account.currency)} />
+                <Metric label="Spend 7d" value="Not connected" muted />
+                <Metric label="Revenue 7d" value="Not connected" muted />
+                <Metric label="ROAS 7d" value="Not connected" muted />
+              </div>
+            ) : !account.metrics_7d ? (
+              <div className="grid grid-cols-3 gap-2 mb-3">
+                <Metric label="Spend 7d" value="No data yet" muted />
+                <Metric label="Revenue 7d" value="No data yet" muted />
+                <Metric label="ROAS 7d" value="No data yet" muted />
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-2 mb-3">
+                <Metric label="Spend 7d" value={fmt(account.metrics_7d.spend, account.currency)} />
+                <Metric label="Revenue 7d" value={fmt(account.metrics_7d.revenue, account.currency)} />
                 <Metric
-                  label="Avg ROAS"
+                  label="ROAS 7d"
                   value={account.metrics_7d.roas_avg != null ? `${account.metrics_7d.roas_avg.toFixed(2)}x` : '--'}
                   highlight={
                     account.target_roas != null && account.metrics_7d.roas_avg != null
@@ -275,8 +280,10 @@ export default function AccountsGrid() {
   )
 }
 
-function Metric({ label, value, highlight }: { label: string; value: string; highlight?: 'red' | 'amber' | 'green' }) {
-  const colour = highlight
+function Metric({ label, value, highlight, muted }: { label: string; value: string; highlight?: 'red' | 'amber' | 'green'; muted?: boolean }) {
+  const colour = muted
+    ? 'text-[#3d4060] italic'
+    : highlight
     ? { red: 'text-red-400', amber: 'text-amber-400', green: 'text-emerald-400' }[highlight]
     : 'text-[#e4e6f0]'
   return (

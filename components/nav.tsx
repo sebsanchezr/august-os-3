@@ -7,10 +7,11 @@ import {
   LayoutDashboard, ClipboardList, KanbanSquare, BookOpen, LogOut, Zap,
   Home, FileText, Inbox, Users, MessageSquare, TrendingUp,
   CheckSquare, Archive, ChevronDown, Briefcase, AlertTriangle, CalendarDays, PhoneCall,
-  Rocket, Globe, Sparkles,
+  Rocket, Globe, Sparkles, Palette,
 } from 'lucide-react'
 import { getSupabaseBrowser } from '@/lib/supabase-browser'
 import { useEffect, useState } from 'react'
+import { filterNav } from '@/lib/access'
 
 // ─── Nav structure ────────────────────────────────────────────────────────────
 
@@ -19,6 +20,66 @@ type NavSection = { id: string; label: string; items: NavItem[] }
 type NavCategory = { label: string; sections: NavSection[] }
 
 const NAV: NavCategory[] = [
+  {
+    label: 'Fulfilment',
+    sections: [
+      {
+        id: 'fulfilment-dashboard',
+        label: 'Overview',
+        items: [
+          { label: 'Dashboard', href: '/fulfilment', icon: LayoutDashboard },
+        ],
+      },
+      {
+        id: 'tasks',
+        label: 'Tasks',
+        items: [
+          { label: 'Board',   href: '/tasks',         icon: KanbanSquare },
+          { label: 'List',    href: '/tasks/list',    icon: ClipboardList },
+          { label: 'Archive', href: '/tasks/archive', icon: Archive       },
+        ],
+      },
+      {
+        id: 'meetings',
+        label: 'Meetings',
+        items: [
+          { label: 'Upcoming', href: '/meetings',      icon: CalendarDays },
+          { label: 'Past',     href: '/meetings/past', icon: Archive      },
+        ],
+      },
+      {
+        id: 'paid-ads',
+        label: 'Paid Ads',
+        items: [
+          { label: 'Client Ads', href: '/ads', icon: TrendingUp },
+        ],
+      },
+      {
+        id: 'creatives',
+        label: 'Creatives',
+        items: [
+          { label: 'Creative Hub', href: '/creatives', icon: Palette },
+        ],
+      },
+      {
+        id: 'onboarding',
+        label: 'Onboarding',
+        items: [
+          { label: 'Pipeline', href: '/onboarding', icon: Rocket },
+        ],
+      },
+      {
+        id: 'accounts',
+        label: 'Accounts',
+        items: [
+          { label: 'Clients',   href: '/accounts',             icon: Briefcase      },
+          { label: 'Comms',     href: '/accounts/comms',       icon: MessageSquare  },
+          { label: 'Approvals', href: '/accounts/approvals',   icon: CheckSquare    },
+          { label: 'Issues',    href: '/accounts/issues',      icon: AlertTriangle  },
+        ],
+      },
+    ],
+  },
   {
     label: 'Acquisition',
     sections: [
@@ -36,6 +97,7 @@ const NAV: NavCategory[] = [
         items: [
           { label: 'Dashboard',  href: '/dashboard', icon: LayoutDashboard },
           { label: 'EOD Reports', href: '/eod',       icon: ClipboardList  },
+          { label: 'Websites',   href: '/websites',   icon: Globe          },
           { label: 'Resources',  href: '/resources',  icon: BookOpen       },
         ],
       },
@@ -78,45 +140,6 @@ const NAV: NavCategory[] = [
         label: 'Upwork',
         items: [
           { label: 'Opportunities', href: '/upwork', icon: Globe },
-        ],
-      },
-    ],
-  },
-  {
-    label: 'Fulfilment',
-    sections: [
-      {
-        id: 'tasks',
-        label: 'Tasks',
-        items: [
-          { label: 'Board',   href: '/tasks',         icon: KanbanSquare },
-          { label: 'List',    href: '/tasks/list',    icon: ClipboardList },
-          { label: 'Archive', href: '/tasks/archive', icon: Archive       },
-        ],
-      },
-      {
-        id: 'meetings',
-        label: 'Meetings',
-        items: [
-          { label: 'Upcoming', href: '/meetings',      icon: CalendarDays },
-          { label: 'Past',     href: '/meetings/past', icon: Archive      },
-        ],
-      },
-      {
-        id: 'onboarding',
-        label: 'Onboarding',
-        items: [
-          { label: 'Pipeline', href: '/onboarding', icon: Rocket },
-        ],
-      },
-      {
-        id: 'accounts',
-        label: 'Accounts',
-        items: [
-          { label: 'Clients',   href: '/accounts',             icon: Briefcase      },
-          { label: 'Comms',     href: '/accounts/comms',       icon: MessageSquare  },
-          { label: 'Approvals', href: '/accounts/approvals',   icon: CheckSquare    },
-          { label: 'Issues',    href: '/accounts/issues',      icon: AlertTriangle  },
         ],
       },
     ],
@@ -260,7 +283,7 @@ export default function Nav() {
         </Link>
 
         {/* Categories */}
-        {NAV.map(category => (
+        {filterNav(NAV, userEmail).map(category => (
           <div key={category.label}>
             <CategoryDivider label={category.label} />
             {category.sections.map(section => (

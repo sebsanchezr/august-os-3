@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdmin } from '@/lib/supabase-server'
 import { notifyDealWon, notifyDealLost } from '@/lib/discord-notify'
+import { VALID_CHANNELS } from '@/lib/pipeline-constants'
 
 export const dynamic = 'force-dynamic'
 
-const VALID_CHANNELS = ['cold_call', 'cold_email', 'linkedin', 'gov', 'referral', 'expansion', 'other'] as const
 const VALID_STAGES = ['new', 'contacted', 'positive_reply', 'booked', 'showed', 'proposal', 'won', 'lost'] as const
 
 // GET /api/pipeline/[id]
@@ -78,15 +78,31 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
     // Won deals auto-create the client record and notify Discord.
-    // Best-effort: a failure here never fails the stage move itself.
+    // Best-effort: a failure here never fails the stage move itself. Guard
+    // against duplicate clients: skip the insert if a non-archived client
+    // with the same name already exists.
     if (body.stage === 'won') {
       try {
-        await supabase.from('clients').insert({
-          name: data.company || data.prospect_name,
-          status: 'active',
-          mrr: data.mrr_value,
-          currency: data.currency,
-        })
+        const clientName = (data.company || data.prospect_name || '').trim()
+        let existingClient = null
+        if (clientName) {
+          const { data: found } = await supabase
+            .from('clients')
+            .select('id')
+            .is('archived_at', null)
+            .ilike('name', clientName)
+            .limit(1)
+            .maybeSingle()
+          existingClient = found
+        }
+        if (!existingClient) {
+          await supabase.from('clients').insert({
+            name: clientName || data.company || data.prospect_name,
+            status: 'active',
+            mrr: data.mrr_value,
+            currency: data.currency,
+          })
+        }
       } catch (clientErr) {
         console.error('[pipeline/[id]/route] failed to auto-create client for won deal', clientErr)
       }
@@ -99,6 +115,21 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ deal: data })
   } catch (err) {
     console.error('[pipeline/[id]/route PATCH]', err)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
+// DELETE /api/pipeline/[id]
+export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const supabase = createSupabaseAdmin()
+    const { error } = await supabase.from('pipeline_deals').delete().eq('id', params.id)
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    return NextResponse.json({ success: true })
+  } catch (err) {
+    console.error('[pipeline/[id]/route DELETE]', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

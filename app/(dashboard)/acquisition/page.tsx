@@ -5,6 +5,18 @@ import { KpiCard } from '@/components/kpi-card'
 import { fetchAcquisition } from '@/lib/pipeline-client'
 import type { AcquisitionRollup } from '@/lib/types'
 
+type AgencyAdsSummary = {
+  spend: number
+  leads: number
+  cpl: number | null
+  revenue: number
+}
+
+type AgencyAdsResponse = {
+  summary: AgencyAdsSummary
+  empty: boolean
+}
+
 const WINDOWS: { key: '7d' | '30d' | 'qtd'; label: string }[] = [
   { key: '7d',  label: '7 Days' },
   { key: '30d', label: '30 Days' },
@@ -31,6 +43,7 @@ export default function AcquisitionPage() {
   const [window, setWindowFilter] = useState<'7d' | '30d' | 'qtd'>('7d')
   const [data, setData] = useState<AcquisitionRollup | null>(null)
   const [loading, setLoading] = useState(true)
+  const [agencyAds, setAgencyAds] = useState<AgencyAdsResponse | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -40,6 +53,15 @@ export default function AcquisitionPage() {
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [window])
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/ads?scope=agency', { cache: 'no-store' })
+      .then((res) => res.json())
+      .then((json) => { if (!cancelled) setAgencyAds(json) })
+      .catch(() => { if (!cancelled) setAgencyAds(null) })
+    return () => { cancelled = true }
+  }, [])
 
   return (
     <div className="p-6 min-h-screen bg-[#08090c]">
@@ -149,7 +171,27 @@ export default function AcquisitionPage() {
             </div>
           </div>
 
-          <p className="text-[10px] text-[#3a3d52]">{data.currency_note}</p>
+          <p className="text-[10px] text-[#3a3d52] mb-6">{data.currency_note}</p>
+
+          <div className="bg-[#10121a] border border-[#1c2035] rounded-xl p-5">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-[#636780] mb-4">Paid Ads</h2>
+            {!agencyAds || agencyAds.empty ? (
+              <p className="text-xs text-[#636780]">
+                Connect the agency Meta ad account (META_ACCESS_TOKEN + AGENCY_META_AD_ACCOUNT_ID) to activate.
+              </p>
+            ) : (
+              <div className="grid grid-cols-4 gap-4">
+                <KpiCard label="7d Spend" value={formatMoney(agencyAds.summary.spend)} accent="blue" />
+                <KpiCard label="7d Leads" value={agencyAds.summary.leads} accent="blue" />
+                <KpiCard
+                  label="7d CPL"
+                  value={agencyAds.summary.cpl !== null ? formatMoney(agencyAds.summary.cpl) : '-'}
+                  accent="amber"
+                />
+                <KpiCard label="7d Revenue" value={formatMoney(agencyAds.summary.revenue)} accent="green" />
+              </div>
+            )}
+          </div>
         </>
       )}
     </div>

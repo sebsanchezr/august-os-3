@@ -5,6 +5,8 @@ import { KpiCard } from '@/components/kpi-card'
 import OnboardingDetail from '@/components/onboarding/onboarding-detail'
 import { fetchOnboardings } from '@/lib/onboarding-client'
 import { formatCurrency } from '@/lib/utils'
+import { getSupabaseBrowser } from '@/lib/supabase-browser'
+import { FULL_ACCESS } from '@/lib/access'
 import type { Onboarding, OnboardingStatus } from '@/lib/types'
 import { ONBOARDING_STATUS_LABELS, ONBOARDING_STATUS_ORDER } from '@/lib/types'
 
@@ -24,6 +26,14 @@ export default function OnboardingPage() {
   const [onboardings, setOnboardings] = useState<Onboarding[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<Onboarding | null>(null)
+  const [userEmail, setUserEmail] = useState<string | null>(null)
+
+  useEffect(() => {
+    getSupabaseBrowser().auth.getUser().then(({ data }) => setUserEmail(data.user?.email ?? null))
+  }, [])
+
+  // Contract fee is Seb's number only, never shown on the fulfilment side.
+  const canSeeFee = !!userEmail && FULL_ACCESS.includes(userEmail.trim().toLowerCase())
 
   async function load() {
     setLoading(true)
@@ -102,7 +112,9 @@ export default function OnboardingPage() {
                         <span className={`text-[10px] px-1.5 py-0.5 rounded ${o.paid ? 'bg-green-500/10 text-green-400' : 'bg-amber-500/10 text-amber-400'}`}>
                           {o.paid ? 'Paid' : 'Unpaid'}
                         </span>
-                        <span className="text-[11px] text-green-400 tabular-nums">{formatCurrency(o.fee_amount, o.currency)}</span>
+                        {canSeeFee && (
+                          <span className="text-[11px] text-green-400 tabular-nums">{formatCurrency(o.fee_amount, o.currency)}</span>
+                        )}
                       </div>
                     </button>
                   ))}
@@ -115,7 +127,7 @@ export default function OnboardingPage() {
       )}
 
       {selected && (
-        <OnboardingDetail onboarding={selected} onClose={() => setSelected(null)} onUpdated={handleUpdated} />
+        <OnboardingDetail onboarding={selected} onClose={() => setSelected(null)} onUpdated={handleUpdated} canSeeFee={canSeeFee} />
       )}
     </div>
   )

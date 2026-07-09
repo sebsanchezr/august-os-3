@@ -75,6 +75,17 @@ export default function TaskList() {
     return track === 'creative' ? CREATIVE_COLUMNS : OPS_COLUMNS
   }
 
+  // Overdue colour rule, creative track only: 'live' means the deliverable
+  // shipped (green, complete) even though the due date has passed. Any other
+  // non-terminal creative status (brief, editing, revision, approved_by_client,
+  // sent_to_media_buyer) that is overdue means work is still stuck (red).
+  function overdueTone(task: Task): 'done' | 'stuck' | null {
+    const due = formatDue(task.due_date)
+    if (!due || due.tone !== 'overdue') return null
+    if (task.track !== 'creative') return null
+    return task.status === 'live' ? 'done' : 'stuck'
+  }
+
   function SortHeader({ label, k, className = '' }: { label: string; k: SortKey; className?: string }) {
     return (
       <th className={`text-left font-medium px-2 py-2 ${className}`}>
@@ -131,8 +142,10 @@ export default function TaskList() {
               )}
               {rows.map((task) => {
                 const due = formatDue(task.due_date)
+                const tone = overdueTone(task)
+                const rowToneClass = tone === 'done' ? 'bg-green-500/10' : tone === 'stuck' ? 'bg-red-500/10' : ''
                 return (
-                  <tr key={task.id} className="border-b border-[#1c2035]/60 hover:bg-[#151824] transition-colors">
+                  <tr key={task.id} className={`border-b border-[#1c2035]/60 hover:bg-[#151824] transition-colors ${rowToneClass}`}>
                     {/* Title */}
                     <td className="px-2 py-1.5">
                       <button onClick={() => setOpenTaskId(task.id)} className="text-left text-[#e4e6f0] hover:text-indigo-400 transition-colors leading-snug">
@@ -189,7 +202,9 @@ export default function TaskList() {
                         type="date"
                         value={task.due_date ?? ''}
                         onChange={(e) => inlineField(task, { due_date: e.target.value || null })}
-                        className={`${cellSelect} ${due ? DUE_TONE_CLASS[due.tone] : ''}`}
+                        className={`${cellSelect} ${
+                          tone === 'done' ? 'text-green-400' : tone === 'stuck' ? 'text-red-400' : due ? DUE_TONE_CLASS[due.tone] : ''
+                        }`}
                       />
                     </td>
                   </tr>

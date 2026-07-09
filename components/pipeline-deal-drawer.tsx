@@ -2,13 +2,16 @@
 
 import { useState, useEffect } from 'react'
 import { X } from 'lucide-react'
-import { updatePipelineDeal } from '@/lib/pipeline-client'
+import { updatePipelineDeal, createPipelineDeal, deletePipelineDeal } from '@/lib/pipeline-client'
+import { SOURCE_CHANNELS } from '@/lib/pipeline-constants'
 import type { PipelineDeal, PipelineStage, SourceChannel } from '@/lib/types'
 
 interface PipelineDealDrawerProps {
   deal: PipelineDeal | null
+  creating?: boolean
   onClose: () => void
-  onSaved: (updated: PipelineDeal) => void
+  onSaved: (deal: PipelineDeal, isNew?: boolean) => void
+  onDeleted?: (id: string) => void
 }
 
 const STAGE_OPTIONS: { value: PipelineStage; label: string }[] = [
@@ -22,15 +25,7 @@ const STAGE_OPTIONS: { value: PipelineStage; label: string }[] = [
   { value: 'lost',           label: 'Lost' },
 ]
 
-const CHANNEL_OPTIONS: { value: SourceChannel; label: string }[] = [
-  { value: 'cold_call',  label: 'Cold Call' },
-  { value: 'cold_email', label: 'Cold Email' },
-  { value: 'linkedin',   label: 'LinkedIn' },
-  { value: 'gov',        label: 'Gov' },
-  { value: 'referral',   label: 'Referral' },
-  { value: 'expansion',  label: 'Expansion' },
-  { value: 'other',      label: 'Other' },
-]
+const CHANNEL_OPTIONS = SOURCE_CHANNELS
 
 type FormState = {
   prospect_name: string
@@ -64,54 +59,116 @@ function toForm(deal: PipelineDeal): FormState {
   }
 }
 
+function emptyForm(): FormState {
+  return {
+    prospect_name: '',
+    company: '',
+    source_channel: 'cold_call',
+    stage: 'new',
+    mrr_value: '',
+    setup_value: '',
+    probability: '',
+    currency: 'GBP',
+    expected_close: '',
+    next_action: '',
+    next_action_due: '',
+    notes: '',
+  }
+}
+
 const inputClass =
   'w-full bg-[#181b27] border border-[#1c2035] rounded-lg px-3 py-2 text-sm text-[#e4e6f0] focus:outline-none focus:ring-1 focus:ring-indigo-500 placeholder:text-[#636780]'
 const labelClass = 'block text-xs font-medium text-[#636780] uppercase tracking-wider'
 
-export default function PipelineDealDrawer({ deal, onClose, onSaved }: PipelineDealDrawerProps) {
+export default function PipelineDealDrawer({ deal, creating, onClose, onSaved, onDeleted }: PipelineDealDrawerProps) {
   const [form, setForm] = useState<FormState | null>(null)
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (deal) {
       setForm(toForm(deal))
       setError(null)
+      setConfirmDelete(false)
+    } else if (creating) {
+      setForm(emptyForm())
+      setError(null)
+      setConfirmDelete(false)
     }
-  }, [deal])
+  }, [deal, creating])
 
-  if (!deal || !form) return null
+  if ((!deal && !creating) || !form) return null
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => (f ? { ...f, [key]: value } : f))
   }
 
   async function handleSave() {
-    if (!deal || !form) return
+    if (!form) return
     setSaving(true)
     setError(null)
     try {
-      const patch: Partial<PipelineDeal> = {
-        prospect_name: form.prospect_name.trim(),
-        company: form.company.trim() || null,
-        source_channel: form.source_channel,
-        stage: form.stage,
-        mrr_value: form.mrr_value === '' ? 0 : Number(form.mrr_value),
-        setup_value: form.setup_value === '' ? 0 : Number(form.setup_value),
-        probability: form.probability === '' ? 0 : Number(form.probability),
-        currency: form.currency.trim() || 'GBP',
-        expected_close: form.expected_close || null,
-        next_action: form.next_action.trim() || null,
-        next_action_due: form.next_action_due || null,
-        notes: form.notes.trim() || null,
+      if (deal) {
+        const patch: Partial<PipelineDeal> = {
+          prospect_name: form.prospect_name.trim(),
+          company: form.company.trim() || null,
+          source_channel: form.source_channel,
+          stage: form.stage,
+          mrr_value: form.mrr_value === '' ? 0 : Number(form.mrr_value),
+          setup_value: form.setup_value === '' ? 0 : Number(form.setup_value),
+          probability: form.probability === '' ? 0 : Number(form.probability),
+          currency: form.currency.trim() || 'GBP',
+          expected_close: form.expected_close || null,
+          next_action: form.next_action.trim() || null,
+          next_action_due: form.next_action_due || null,
+          notes: form.notes.trim() || null,
+        }
+        const updated = await updatePipelineDeal(deal.id, patch)
+        onSaved(updated)
+      } else {
+        const created = await createPipelineDeal({
+          prospect_name: form.prospect_name.trim(),
+          company: form.company.trim() || undefined,
+          source_channel: form.source_channel,
+          stage: form.stage,
+          mrr_value: form.mrr_value === '' ? 0 : Number(form.mrr_value),
+          setup_value: form.setup_value === '' ? 0 : Number(form.setup_value),
+          probability: form.probability === '' ? 0 : Number(form.probability),
+          currency: form.currency.trim() || 'GBP',
+          expected_close: form.expected_close || undefined,
+          next_action: form.next_action.trim() || undefined,
+          next_action_due: form.next_action_due || undefined,
+          notes: form.notes.trim() || undefined,
+        })
+        onSaved(created, true)
       }
-      const updated = await updatePipelineDeal(deal.id, patch)
-      onSaved(updated)
       onClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleDelete() {
+    if (!deal) return
+    if (!confirmDelete) {
+      setConfirmDelete(true)
+      return
+    }
+    setDeleting(true)
+    setError(null)
+    try {
+      await deletePipelineDeal(deal.id)
+      onDeleted?.(deal.id)
+      onClose()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete deal')
+      setConfirmDelete(false)
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -129,8 +186,10 @@ export default function PipelineDealDrawer({ deal, onClose, onSaved }: PipelineD
         {/* Header */}
         <div className="px-6 py-4 border-b border-[#1c2035] flex items-center justify-between shrink-0">
           <div>
-            <h2 className="text-sm font-semibold text-[#e4e6f0]">Edit Lead</h2>
-            <p className="text-xs text-[#636780] mt-0.5 truncate">{deal.prospect_name}</p>
+            <h2 className="text-sm font-semibold text-[#e4e6f0]">{deal ? 'Edit Lead' : 'Add Deal'}</h2>
+            <p className="text-xs text-[#636780] mt-0.5 truncate">
+              {deal ? deal.prospect_name : 'New pipeline deal'}
+            </p>
           </div>
           <button
             onClick={onClose}
@@ -295,20 +354,35 @@ export default function PipelineDealDrawer({ deal, onClose, onSaved }: PipelineD
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-[#1c2035] flex gap-3 shrink-0">
-          <button
-            onClick={onClose}
-            className="flex-1 text-[#636780] hover:text-[#e4e6f0] hover:bg-[#181b27] rounded-lg px-4 py-2 text-sm transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving || !form.prospect_name.trim()}
-            className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50"
-          >
-            {saving ? 'Saving...' : 'Save Changes'}
-          </button>
+        <div className="px-6 py-4 border-t border-[#1c2035] flex flex-col gap-2 shrink-0">
+          <div className="flex gap-3">
+            <button
+              onClick={onClose}
+              className="flex-1 text-[#636780] hover:text-[#e4e6f0] hover:bg-[#181b27] rounded-lg px-4 py-2 text-sm transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving || !form.prospect_name.trim()}
+              className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50"
+            >
+              {saving ? (deal ? 'Saving...' : 'Creating...') : deal ? 'Save Changes' : 'Create Deal'}
+            </button>
+          </div>
+          {deal && (
+            <button
+              onClick={handleDelete}
+              disabled={deleting || saving}
+              className={`w-full rounded-lg px-4 py-2 text-xs font-medium transition-colors disabled:opacity-50 ${
+                confirmDelete
+                  ? 'bg-red-600 hover:bg-red-500 text-white'
+                  : 'text-red-400 border border-red-500/30 hover:bg-red-500/10'
+              }`}
+            >
+              {deleting ? 'Deleting...' : confirmDelete ? 'Click again to confirm delete' : 'Delete Deal'}
+            </button>
+          )}
         </div>
       </div>
     </>
