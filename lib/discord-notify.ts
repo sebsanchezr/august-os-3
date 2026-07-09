@@ -375,6 +375,28 @@ export function notifyApprovedComms(client: NotifyClient, clientMessage: string)
   void post(ACCOUNTS_WEBHOOK_URL, `Message approved for ${client.name}. Forward to WA group.`, [embed])
 }
 
+// ─── Creative engine notifications ─────────────────────────────────────────────
+
+// Fired when the ad creative engine finishes generating statics for a client,
+// whether from an approved weekly strategy or an ad hoc Quick Generate run.
+export function notifyCreativesGenerated(
+  clientName: string,
+  generated: number,
+  failed: number,
+  source: 'strategy' | 'quick',
+): void {
+  const label = source === 'quick' ? 'Quick Generate' : 'Weekly strategy'
+  const embed: Embed = {
+    title: `Statics ready: ${clientName}`,
+    url: `${OS_URL}/creatives`,
+    color: failed > 0 ? 0xF59E0B : 0x10B981,
+    description: `${label} produced **${generated}** static${generated === 1 ? '' : 's'}${failed > 0 ? `, ${failed} failed` : ''}. Review in the Creative Hub.`,
+    footer: { text: 'August OS Creatives' },
+    timestamp: new Date().toISOString(),
+  }
+  void post(ACCOUNTS_WEBHOOK_URL, `New statics for ${clientName} (${generated} ready).`, [embed])
+}
+
 // ─── Pipeline notifications ────────────────────────────────────────────────────
 
 type NotifyDeal = {

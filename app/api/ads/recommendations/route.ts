@@ -1,13 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createSupabaseAdmin } from '@/lib/supabase-server'
-import { isMetaConfigured, fetchCampaignBreakdown } from '@/lib/meta'
+import { isMetaConfigured, isMetaMock, fetchCampaignBreakdown, fetchAdEntities, type MetaAdEntity } from '@/lib/meta'
+import { runHygieneRules, type HygieneFinding, type HygieneContext } from '@/app/api/ads/_hygiene/rules'
+import { FIXTURE_ENTITIES } from '@/app/api/ads/_hygiene/fixture'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
 const REPORT_TYPE = 'ads_recommendations'
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+// The mock path lets the whole flow be demoed while the Meta token is dead.
+// Allowed when MOCK_META=1 (dev intent) or via ?mock=1, but the query param is
+// gated to non-production so it can never be triggered on the live deployment.
+function mockAllowed(req: NextRequest): boolean {
+  if (isMetaMock()) return true
+  const wants = new URL(req.url).searchParams.get('mock') === '1'
+  return wants && process.env.NODE_ENV !== 'production'
+}
+
+// Compact, LLM-friendly view of an entity so the prompt stays readable.
+function entityForPrompt(e: MetaAdEntity) {
+  return {
+    level: e.level,
+    name: e.name,
+    status: e.effectiveStatus,
+    daily_budget: e.dailyBudget,
+    spend_7d: Math.round(e.last7d.spend),
+    purchases_7d: e.last7d.purchases,
+    roas_7d: e.last7d.roas !== null ? Number(e.last7d.roas.toFixed(2)) : null,
+    frequency_7d: Number(e.last7d.frequency.toFixed(2)),
+    impressions_7d: e.last7d.impressions,
+    spend_prev7d: Math.round(e.prev7d.spend),
+    roas_prev7d: e.prev7d.roas !== null ? Number(e.prev7d.roas.toFixed(2)) : null,
+  }
+}
 
 function ymd(d: Date): string {
   return d.toISOString().slice(0, 10)
@@ -32,7 +60,7 @@ export async function GET(req: NextRequest) {
   const supabase = createSupabaseAdmin()
   const { data, error } = await supabase
     .from('client_reports')
-    .select('id, draft_md, created_at')
+    .select('id, draft_md, created_at, metrics')
     .eq('client_id', clientId)
     .eq('type', REPORT_TYPE)
     .order('created_at', { ascending: false })
@@ -40,7 +68,14 @@ export async function GET(req: NextRequest) {
     .maybeSingle()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ recommendation: data ?? null })
+
+  const metrics = (data?.metrics ?? null) as { hygiene_findings?: HygieneFinding[] } | null
+  const findings = Array.isArray(metrics?.hygiene_findings) ? metrics!.hygiene_findings : []
+
+  return NextResponse.json({
+    recommendation: data ? { id: data.id, draft_md: data.draft_md, created_at: data.created_at } : null,
+    findings,
+  })
 }
 
 // POST /api/ads/recommendations { client_id }
@@ -105,21 +140,77 @@ export async function POST(req: NextRequest) {
       monthly_budget: client.monthly_budget,
     }
 
-    const prompt = `You are a senior Meta media buyer managing paid social for an ecommerce brand.
+    // ── Entity-level pull + deterministic hygiene checks ──────────────────
+    // Fetch fresh campaign/adset/ad state (mock when the Meta token is dead),
+    // run the rule engine BEFORE the model, and persist a snapshot so the run
+    // is auditable. The findings, not strategy, are what the media buyer wants.
+    const useMock = mockAllowed(req)
+    let entities: MetaAdEntity[] = []
+    let entityNote: string | null = null
 
-Here is the last 14 days of daily account performance (JSON):
-${JSON.stringify(dailyMetrics)}
+    if (useMock) {
+      entities = FIXTURE_ENTITIES
+      entityNote = 'Using mock ad-entity data (Meta token unavailable).'
+    } else if (isMetaConfigured() && client.meta_ad_account_id) {
+      const res = await fetchAdEntities(client.meta_ad_account_id)
+      if (res.ok) {
+        entities = res.data
+      } else {
+        entityNote = `Entity-level data unavailable: ${res.error}`
+      }
+    } else {
+      entityNote = 'No entity-level data (Meta not connected).'
+    }
 
-Campaign-level breakdown for the same window (JSON, may be empty if unavailable):
-${JSON.stringify(campaigns)}
-${campaignNote ? `Note: ${campaignNote}` : ''}
+    const hygieneCtx: HygieneContext = {
+      targetRoas: client.target_roas ?? null,
+      targetCpa: client.target_cpa ?? null,
+      currency: '£',
+    }
+    const findings: HygieneFinding[] = entities.length > 0 ? runHygieneRules(entities, hygieneCtx) : []
 
-Account targets:
+    const snapshotDate = until
+    if (entities.length > 0) {
+      const snapshotRows = entities.map((e) => ({
+        client_id: clientId,
+        snapshot_date: snapshotDate,
+        level: e.level,
+        entity_id: e.id,
+        entity_name: e.name,
+        effective_status: e.effectiveStatus,
+        daily_budget: e.dailyBudget,
+        spend_7d: e.last7d.spend,
+        purchases_7d: e.last7d.purchases,
+        revenue_7d: e.last7d.revenue,
+        roas_7d: e.last7d.roas,
+        ctr_7d: e.last7d.ctr,
+        frequency: e.last7d.frequency,
+        spend_prev7d: e.prev7d.spend,
+        roas_prev7d: e.prev7d.roas,
+        raw: e as unknown as Record<string, unknown>,
+      }))
+      const { error: snapError } = await supabase
+        .from('ad_entities_snapshot')
+        .upsert(snapshotRows, { onConflict: 'client_id,snapshot_date,level,entity_id' })
+      if (snapError) console.error('[ads/recommendations] snapshot upsert failed', snapError.message)
+    }
+
+    const prompt = `You are a senior Meta media buyer doing an operational review of an ad account. Your ONLY job is to surface things the media buyer may have MISSED operationally or creatively: something left running that should be off, a winner that was paused by mistake, delivery that has stalled, or creative that has fatigued. This is NOT a strategy review. Do NOT suggest new audiences, new campaign structures, new creative concepts, bidding strategies, or scaling plans.
+
+A deterministic rule engine has already flagged the following issues (JSON). Treat these as the backbone of your review:
+${JSON.stringify(findings)}
+${findings.length === 0 ? 'The rule engine found no hard flags. Still scan the entity table below for anything operationally odd.' : ''}
+
+Current campaign / ad set / ad state, last 7 days vs previous 7 days (JSON):
+${JSON.stringify(entities.map(entityForPrompt))}
+${entityNote ? `Note: ${entityNote}` : ''}
+
+Account targets (for reference only, not for strategy advice):
 ${JSON.stringify(targets)}
 
-Produce 3 to 5 specific, prioritised recommendations (highest priority first). Cover scaling opportunities, cuts to underperforming spend, creative refresh needs, and budget moves between campaigns where the data supports it. For each recommendation, cite the specific metric evidence (numbers) that justifies it, and compare against the account targets where relevant.
+Write a short prioritised checklist (highest severity first) of operational items for the media buyer to verify. For each item: name the exact entity, state what looks wrong with the specific numbers, and phrase it as a "check this / did you mean to do this" prompt, not a strategy instruction. If an issue is a clear mistake (money spent with zero sales, a paused winner), say so plainly.
 
-Never use em-dashes. Be direct and specific, no generic advice. Format the response as markdown with a short heading per recommendation.`
+Never use em-dashes. Be direct and specific. Format as markdown with a short heading per item.`
 
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-5',
@@ -138,7 +229,7 @@ Never use em-dashes. Be direct and specific, no generic advice. Format the respo
         type: REPORT_TYPE,
         period_start: since,
         period_end: until,
-        metrics: { daily: dailyMetrics, campaigns, targets },
+        metrics: { daily: dailyMetrics, campaigns, targets, hygiene_findings: findings },
         draft_md: markdown,
         status: 'approved',
       })
@@ -154,6 +245,9 @@ Never use em-dashes. Be direct and specific, no generic advice. Format the respo
 
     return NextResponse.json({
       markdown,
+      findings,
+      entity_note: entityNote,
+      mock: useMock,
       generated_at: new Date().toISOString(),
       persisted,
       persist_note: persistNote,

@@ -54,6 +54,18 @@ type Recommendation = {
   persist_note?: string
 }
 
+type Severity = 'high' | 'medium' | 'low'
+
+type HygieneFinding = {
+  rule: string
+  severity: Severity
+  level: string
+  entityId: string
+  entityName: string
+  message: string
+  evidence: string
+}
+
 function formatMoney(amount: number): string {
   return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 }).format(amount)
 }
@@ -61,6 +73,12 @@ function formatMoney(amount: number): string {
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr)
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+}
+
+const SEVERITY_BADGE: Record<Severity, string> = {
+  high: 'bg-red-500/15 text-red-400 border-red-500/30',
+  medium: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+  low: 'bg-sky-500/15 text-sky-400 border-sky-500/30',
 }
 
 interface TooltipPayloadEntry {
@@ -94,6 +112,7 @@ export default function AdsPage() {
   const [loadingClients, setLoadingClients] = useState(true)
   const [loadingDetail, setLoadingDetail] = useState(false)
   const [recommendation, setRecommendation] = useState<Recommendation | null>(null)
+  const [findings, setFindings] = useState<HygieneFinding[]>([])
   const [recLoading, setRecLoading] = useState(false)
   const [recError, setRecError] = useState<string | null>(null)
 
@@ -130,6 +149,7 @@ export default function AdsPage() {
     fetch(`/api/ads/recommendations?client_id=${clientId}`, { cache: 'no-store' })
       .then((res) => res.json())
       .then((json) => {
+        setFindings(Array.isArray(json.findings) ? json.findings : [])
         if (json.recommendation) {
           setRecommendation({
             markdown: json.recommendation.draft_md,
@@ -140,13 +160,17 @@ export default function AdsPage() {
           setRecommendation(null)
         }
       })
-      .catch(() => setRecommendation(null))
+      .catch(() => {
+        setRecommendation(null)
+        setFindings([])
+      })
   }, [])
 
   useEffect(() => {
     if (!selectedId) return
     setDetail(null)
     setRecommendation(null)
+    setFindings([])
     setRecError(null)
     loadDetail(selectedId)
     loadRecommendation(selectedId)
@@ -186,6 +210,7 @@ export default function AdsPage() {
         setRecError(json.error ?? 'Failed to generate recommendations')
         return
       }
+      setFindings(Array.isArray(json.findings) ? json.findings : [])
       setRecommendation({
         markdown: json.markdown,
         generated_at: json.generated_at,
@@ -314,6 +339,36 @@ export default function AdsPage() {
               </div>
 
               {recError && <p className="text-xs text-red-400 mb-3">{recError}</p>}
+
+              {findings.length > 0 && (
+                <div className="mb-4">
+                  <h3 className="text-[10px] font-semibold uppercase tracking-wide text-[#636780] mb-2">
+                    Account hygiene checks ({findings.length})
+                  </h3>
+                  <div className="space-y-2">
+                    {findings.map((f) => (
+                      <div
+                        key={`${f.rule}-${f.entityId}`}
+                        className="flex items-start gap-3 bg-[#181b27] border border-[#1c2035] rounded-lg p-3"
+                      >
+                        <span
+                          className={`shrink-0 mt-0.5 px-1.5 py-0.5 rounded border text-[9px] font-semibold uppercase tracking-wide ${SEVERITY_BADGE[f.severity]}`}
+                        >
+                          {f.severity}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-xs text-[#e4e6f0]">
+                            <span className="text-[#636780] uppercase text-[9px] mr-1.5">{f.level}</span>
+                            {f.entityName}
+                          </p>
+                          <p className="text-xs text-[#8b8fa8] mt-0.5">{f.message}</p>
+                          <p className="text-[10px] text-[#636780] mt-0.5 tabular-nums">{f.evidence}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {recommendation ? (
                 <>

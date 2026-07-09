@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import {
   Plus, ExternalLink, ChevronDown, ChevronUp, Trash2, Sparkles, Check, Image as ImageIcon, X,
+  Loader2, Copy, Wand2, RefreshCw,
 } from 'lucide-react'
 import {
   ASSET_KINDS,
@@ -10,7 +11,10 @@ import {
   type ClientOption,
   type CreativeAssetWithClient,
   type StrategyItem,
+  type CreativeOutput,
 } from '@/lib/creatives'
+
+type OutputWithClient = CreativeOutput & { client: { id: string; name: string } | null }
 
 type Tab = 'strategies' | 'library'
 
@@ -41,6 +45,55 @@ function fmtDate(d: string): string {
   return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
 }
 
+function OutputGrid({
+  items, copiedUrl, onCopy,
+}: {
+  items: OutputWithClient[]
+  copiedUrl: string | null
+  onCopy: (url: string) => void
+}) {
+  if (items.length === 0) return null
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      {items.map(o => (
+        <div key={o.id} className="rounded-lg border border-[#1c2035] bg-[#08090c] overflow-hidden">
+          {o.image_url ? (
+            <a href={o.image_url} target="_blank" rel="noopener noreferrer" className="block aspect-square bg-[#0d0f16]">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={o.image_url} alt={o.concept_title ?? 'Generated static'} className="w-full h-full object-cover" />
+            </a>
+          ) : (
+            <div className="aspect-square flex items-center justify-center p-2 text-center">
+              <span className="text-[10px] text-red-400">{o.error ?? 'Failed'}</span>
+            </div>
+          )}
+          <div className="p-2">
+            <p className="text-[11px] text-[#e4e6f0] truncate" title={o.concept_title ?? ''}>{o.concept_title ?? 'Untitled'}</p>
+            {o.image_url && (
+              <div className="flex items-center gap-2 mt-1.5">
+                <a
+                  href={o.image_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-[10px] text-[#636780] hover:text-indigo-400"
+                >
+                  <ExternalLink className="h-3 w-3" /> Open
+                </a>
+                <button
+                  onClick={() => onCopy(o.image_url as string)}
+                  className="flex items-center gap-1 text-[10px] text-[#636780] hover:text-indigo-400"
+                >
+                  <Copy className="h-3 w-3" /> {copiedUrl === o.image_url ? 'Copied' : 'Copy URL'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function CreativesPage() {
   const [tab, setTab] = useState<Tab>('strategies')
   const [clients, setClients] = useState<ClientOption[]>([])
@@ -56,6 +109,14 @@ export default function CreativesPage() {
   const [newStrategy, setNewStrategy] = useState({ client_id: '', focus: '', notes: '' })
   const [creatingStrategy, setCreatingStrategy] = useState(false)
   const [newStrategyError, setNewStrategyError] = useState<string | null>(null)
+
+  const [outputs, setOutputs] = useState<OutputWithClient[]>([])
+  const [copiedUrl, setCopiedUrl] = useState<string | null>(null)
+
+  const [quick, setQuick] = useState({ client_id: '', brief: '', quantity: 2 })
+  const [quickBusy, setQuickBusy] = useState(false)
+  const [quickError, setQuickError] = useState<string | null>(null)
+  const [quickDone, setQuickDone] = useState<string | null>(null)
 
   const [assets, setAssets] = useState<CreativeAssetWithClient[]>([])
   const [assetsLoading, setAssetsLoading] = useState(true)
@@ -104,11 +165,57 @@ export default function CreativesPage() {
     }
   }, [])
 
+  const fetchOutputs = useCallback(async () => {
+    const res = await fetch('/api/creatives?scope=outputs')
+    if (res.ok) {
+      const d = await res.json()
+      setOutputs(d.outputs ?? [])
+    }
+  }, [])
+
   useEffect(() => {
     fetchClients()
     fetchStrategies()
     fetchAssets()
-  }, [fetchClients, fetchStrategies, fetchAssets])
+    fetchOutputs()
+  }, [fetchClients, fetchStrategies, fetchAssets, fetchOutputs])
+
+  async function copyUrl(url: string) {
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopiedUrl(url)
+      setTimeout(() => setCopiedUrl(prev => (prev === url ? null : prev)), 1500)
+    } catch { /* clipboard blocked; ignore */ }
+  }
+
+  async function runQuickGenerate() {
+    if (!quick.client_id || !quick.brief.trim()) {
+      setQuickError('Pick a client and describe the statics you need.')
+      return
+    }
+    setQuickBusy(true)
+    setQuickError(null)
+    setQuickDone(null)
+    try {
+      const res = await fetch('/api/creatives/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client_id: quick.client_id, brief: quick.brief, quantity: quick.quantity }),
+      })
+      const d = await res.json()
+      if (!res.ok || !d.delivered) {
+        setQuickError(d.error ?? 'Generation failed.')
+        return
+      }
+      setQuickDone(`Generated ${d.generated} static${d.generated === 1 ? '' : 's'}${d.failed ? `, ${d.failed} failed` : ''}.`)
+      setQuick(q => ({ ...q, brief: '' }))
+      fetchOutputs()
+    } catch {
+      setQuickError('Generation failed.')
+    } finally {
+      setQuickBusy(false)
+    }
+  }
 
   function toggleExpanded(id: string) {
     setExpanded(prev => {
@@ -159,6 +266,7 @@ export default function CreativesPage() {
 
   async function generateStatics(id: string) {
     setBusyStrategyId(id)
+    setGenNote(prev => ({ ...prev, [id]: 'Generating statics, this can take up to a minute...' }))
     try {
       const res = await fetch('/api/creatives/generate', {
         method: 'POST',
@@ -166,14 +274,17 @@ export default function CreativesPage() {
         body: JSON.stringify({ strategy_id: id }),
       })
       const d = await res.json()
-      if (d.skipped) {
-        setGenNote(prev => ({ ...prev, [id]: 'Image generation not connected yet.' }))
-      } else if (d.queued) {
-        setGenNote(prev => ({ ...prev, [id]: 'Generation queued.' }))
+      if (d.delivered) {
+        setGenNote(prev => ({ ...prev, [id]: `Generated ${d.generated} static${d.generated === 1 ? '' : 's'}${d.failed ? `, ${d.failed} failed` : ''}.` }))
         fetchStrategies()
+        fetchOutputs()
       } else {
-        setGenNote(prev => ({ ...prev, [id]: d.error ?? 'Failed to queue generation.' }))
+        setGenNote(prev => ({ ...prev, [id]: d.error ?? 'Generation failed.' }))
+        fetchStrategies()
       }
+    } catch {
+      setGenNote(prev => ({ ...prev, [id]: 'Generation failed.' }))
+      fetchStrategies()
     } finally {
       setBusyStrategyId(null)
     }
@@ -243,6 +354,61 @@ export default function CreativesPage() {
 
       {tab === 'strategies' && (
         <div>
+          {/* Quick Generate: statics in minutes, no weekly strategy needed. */}
+          <div className="rounded-xl border border-indigo-500/30 bg-gradient-to-b from-indigo-500/[0.07] to-transparent p-4 mb-5">
+            <div className="flex items-center gap-2 mb-3">
+              <Wand2 className="h-4 w-4 text-indigo-400" />
+              <p className="text-sm font-medium text-[#e4e6f0]">Quick Generate</p>
+              <span className="text-xs text-[#636780]">statics in minutes, no strategy needed</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3">
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <select
+                    value={quick.client_id}
+                    onChange={(e) => setQuick(q => ({ ...q, client_id: e.target.value }))}
+                    className="bg-[#08090c] border border-[#1c2035] rounded-lg px-3 py-2 text-sm text-[#e4e6f0] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  >
+                    <option value="">Select client...</option>
+                    {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                  <select
+                    value={quick.quantity}
+                    onChange={(e) => setQuick(q => ({ ...q, quantity: Number(e.target.value) }))}
+                    className="bg-[#08090c] border border-[#1c2035] rounded-lg px-3 py-2 text-sm text-[#e4e6f0] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  >
+                    {[1, 2, 3, 4].map(n => <option key={n} value={n}>{n} image{n === 1 ? '' : 's'}</option>)}
+                  </select>
+                </div>
+                <textarea
+                  value={quick.brief}
+                  onChange={(e) => setQuick(q => ({ ...q, brief: e.target.value }))}
+                  placeholder="What statics do you need? e.g. bold product-on-colour ad for the summer sale, price 29.99, urgent tone"
+                  rows={2}
+                  className="w-full bg-[#08090c] border border-[#1c2035] rounded-lg px-3 py-2 text-sm text-[#e4e6f0] focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none"
+                />
+              </div>
+              <button
+                onClick={runQuickGenerate}
+                disabled={quickBusy}
+                className="flex items-center justify-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-50 self-start sm:h-full sm:min-w-[8rem]"
+              >
+                {quickBusy ? <><Loader2 className="h-4 w-4 animate-spin" /> Generating...</> : <><Wand2 className="h-4 w-4" /> Generate</>}
+              </button>
+            </div>
+            {quickError && <p className="text-xs text-red-400 mt-2">{quickError}</p>}
+            {quickDone && <p className="text-xs text-emerald-400 mt-2">{quickDone}</p>}
+            {(() => {
+              const adhoc = outputs.filter(o => !o.strategy_id && o.client_id === quick.client_id)
+              return quick.client_id && adhoc.length > 0 ? (
+                <div className="mt-3">
+                  <p className="text-[11px] text-[#636780] mb-2">Recent Quick Generate results</p>
+                  <OutputGrid items={adhoc} copiedUrl={copiedUrl} onCopy={copyUrl} />
+                </div>
+              ) : null
+            })()}
+          </div>
+
           <div className="flex items-center justify-between mb-4">
             <p className="text-xs text-[#636780]">One strategy per client per week. Approve a draft, then queue statics.</p>
             <button
@@ -342,7 +508,25 @@ export default function CreativesPage() {
                           disabled={busyStrategyId === strategy.id}
                           className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-[#181b27] text-[#e4e6f0] hover:bg-[#1c2035] disabled:opacity-50"
                         >
-                          <ImageIcon className="h-3.5 w-3.5" /> Generate statics
+                          {busyStrategyId === strategy.id
+                            ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Generating...</>
+                            : <><ImageIcon className="h-3.5 w-3.5" /> Generate statics</>}
+                        </button>
+                      )}
+                      {strategy && strategy.status === 'generating' && (
+                        <span className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-purple-500/15 text-purple-400">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Generating...
+                        </span>
+                      )}
+                      {strategy && strategy.status === 'delivered' && (
+                        <button
+                          onClick={() => generateStatics(strategy.id)}
+                          disabled={busyStrategyId === strategy.id}
+                          className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-[#181b27] text-[#e4e6f0] hover:bg-[#1c2035] disabled:opacity-50"
+                        >
+                          {busyStrategyId === strategy.id
+                            ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Working...</>
+                            : <><RefreshCw className="h-3.5 w-3.5" /> Regenerate</>}
                         </button>
                       )}
                       {strategy?.strategy_md && (
@@ -365,6 +549,15 @@ export default function CreativesPage() {
                       <p className="text-xs text-[#e4e6f0] whitespace-pre-wrap leading-relaxed">{strategy.strategy_md}</p>
                     </div>
                   )}
+
+                  {strategy && (() => {
+                    const stratOutputs = outputs.filter(o => o.strategy_id === strategy.id)
+                    return stratOutputs.length > 0 ? (
+                      <div className="mt-3">
+                        <OutputGrid items={stratOutputs} copiedUrl={copiedUrl} onCopy={copyUrl} />
+                      </div>
+                    ) : null
+                  })()}
                 </div>
               ))}
             </div>

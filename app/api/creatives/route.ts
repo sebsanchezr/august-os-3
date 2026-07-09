@@ -48,6 +48,21 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ weekStart, items })
   }
 
+  if (scope === 'outputs') {
+    const { data, error } = await supabase
+      .from('creative_strategy_outputs')
+      .select('*, client:clients(id, name)')
+      .order('created_at', { ascending: false })
+      .limit(300)
+    if (error) {
+      if (isMissingTableError(error)) {
+        return NextResponse.json({ error: 'Run migration 035 to enable creative outputs.' }, { status: 409 })
+      }
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+    return NextResponse.json({ outputs: data ?? [] })
+  }
+
   // scope === 'assets'
   const { data, error } = await supabase
     .from('client_creative_assets')

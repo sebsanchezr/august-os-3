@@ -81,3 +81,29 @@ export type KnowledgeContext = {
   title: string
   content: string
 }
+
+// One generated static image row (migration 035). strategy_id is null for
+// ad hoc Quick Generate outputs that were not tied to a weekly strategy.
+export type CreativeOutput = {
+  id: string
+  strategy_id: string | null
+  client_id: string | null
+  concept_index: number | null
+  concept_title: string | null
+  prompt_used: string | null
+  image_url: string | null
+  storage_path: string | null
+  status: string
+  error: string | null
+  created_at: string
+}
+
+// A single concept the image engine renders: parsed from a strategy or expanded
+// from a freeform brief. hook is short in-image copy (keep under ~25 chars for
+// legibility); aspect_ratio is '1:1' (feed) or '4:5' (portrait feed).
+export type GenConcept = {
+  title: string
+  hook: string
+  visual_direction: string
+  aspect_ratio: '1:1' | '4:5'
+}

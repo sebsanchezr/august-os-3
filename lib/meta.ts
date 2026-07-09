@@ -32,8 +32,44 @@ export type MetaCampaignInsight = {
   roas: number | null
 }
 
+export type MetaEntityLevel = 'campaign' | 'adset' | 'ad'
+
+export type MetaEntityInsights = {
+  spend: number
+  purchases: number
+  revenue: number
+  roas: number | null
+  ctr: number
+  impressions: number
+  frequency: number
+}
+
+// A single campaign / adset / ad with its operational state (effective_status,
+// budget) plus last-7d and prev-7d insights. This is what the hygiene rule
+// engine reads: without effective_status and per-entity spend, checks like
+// "ad set left running with no sales" or "paused a winner" are impossible.
+export type MetaAdEntity = {
+  level: MetaEntityLevel
+  id: string
+  name: string
+  effectiveStatus: string
+  dailyBudget: number | null
+  lifetimeBudget: number | null
+  campaignId: string | null
+  adsetId: string | null
+  last7d: MetaEntityInsights
+  prev7d: MetaEntityInsights
+}
+
 export function isMetaConfigured(): boolean {
   return Boolean(process.env.META_ACCESS_TOKEN)
+}
+
+// Dev-only escape hatch: when MOCK_META=1 the recommendations flow uses a
+// bundled fixture instead of calling Meta, so the whole press-button flow can
+// be demoed while the access token is dead / being re-authed.
+export function isMetaMock(): boolean {
+  return process.env.MOCK_META === '1'
 }
 
 const PURCHASE_ACTION_TYPES = ['omni_purchase', 'purchase']
@@ -174,4 +210,175 @@ export async function fetchCampaignBreakdown(
   })
 
   return { ok: true, data }
+}
+
+// ─── Entity-level (campaign / adset / ad) fetch ─────────────────────────────
+// Meta stores ad-account ids without the graph "act_" prefix in some places
+// (clients.meta_ad_account_id holds raw numeric ids). Normalise so callers can
+// pass either form.
+function withActPrefix(accountId: string): string {
+  return accountId.startsWith('act_') ? accountId : `act_${accountId}`
+}
+
+function ymd(d: Date): string {
+  return d.toISOString().slice(0, 10)
+}
+
+interface GraphEdgeRow {
+  id?: string
+  name?: string
+  effective_status?: string
+  daily_budget?: string
+  lifetime_budget?: string
+  campaign_id?: string
+  adset_id?: string
+}
+
+interface GraphInsightRow extends MetaInsightRow {
+  campaign_id?: string
+  adset_id?: string
+  ad_id?: string
+  frequency?: string
+}
+
+interface GraphPagedResponse<T> {
+  data?: T[]
+  paging?: { next?: string; cursors?: { after?: string } }
+  error?: { message?: string; type?: string; code?: number }
+}
+
+// Follows paging.next until exhausted (capped) and returns every row. Any page
+// failure aborts with the error, so partial data never masquerades as complete.
+async function graphGetAll<T>(path: string, params: Record<string, string>): Promise<MetaResult<T[]>> {
+  const token = process.env.META_ACCESS_TOKEN
+  if (!token) return { ok: false, error: 'META_ACCESS_TOKEN is not configured' }
+
+  const rows: T[] = []
+  let url: string | null = `${GRAPH_BASE}${path}?${new URLSearchParams({ ...params, limit: '200', access_token: token }).toString()}`
+  let guard = 0
+
+  while (url && guard < 25) {
+    guard += 1
+    let res: Response
+    try {
+      res = await fetch(url, { cache: 'no-store' })
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : 'Network error calling Meta API' }
+    }
+
+    let json: GraphPagedResponse<T>
+    try {
+      json = await res.json()
+    } catch {
+      return { ok: false, error: `Meta API returned non-JSON response (status ${res.status})` }
+    }
+
+    if (!res.ok || json.error) {
+      return { ok: false, error: json.error?.message ?? `Meta API error (status ${res.status})` }
+    }
+
+    rows.push(...(json.data ?? []))
+    url = json.paging?.next ?? null
+  }
+
+  return { ok: true, data: rows }
+}
+
+function minorToMajor(v: string | undefined): number | null {
+  if (v === undefined) return null
+  const n = parseFloat(v)
+  return Number.isFinite(n) ? n / 100 : null
+}
+
+function rowToEntityInsights(row: GraphInsightRow): MetaEntityInsights {
+  const daily = rowToDailyInsight(row)
+  return {
+    spend: daily.spend,
+    purchases: daily.purchases,
+    revenue: daily.revenue,
+    roas: daily.roas,
+    ctr: daily.ctr,
+    impressions: daily.impressions,
+    frequency: num(row.frequency),
+  }
+}
+
+const ZERO_INSIGHTS: MetaEntityInsights = {
+  spend: 0, purchases: 0, revenue: 0, roas: null, ctr: 0, impressions: 0, frequency: 0,
+}
+
+const ENTITY_EDGE: Record<MetaEntityLevel, { edge: string; fields: string; idKey: keyof GraphInsightRow }> = {
+  campaign: { edge: 'campaigns', fields: 'id,name,effective_status,daily_budget,lifetime_budget', idKey: 'campaign_id' },
+  adset: { edge: 'adsets', fields: 'id,name,effective_status,daily_budget,lifetime_budget,campaign_id', idKey: 'adset_id' },
+  ad: { edge: 'ads', fields: 'id,name,effective_status,adset_id,campaign_id', idKey: 'ad_id' },
+}
+
+async function fetchLevelInsights(
+  account: string,
+  level: MetaEntityLevel,
+  since: string,
+  until: string,
+): Promise<MetaResult<Map<string, MetaEntityInsights>>> {
+  const res = await graphGetAll<GraphInsightRow>(`/${account}/insights`, {
+    time_range: JSON.stringify({ since, until }),
+    level,
+    fields: 'spend,impressions,clicks,ctr,frequency,actions,action_values,purchase_roas',
+  })
+  if (!res.ok) return res
+
+  const idKey = ENTITY_EDGE[level].idKey
+  const map = new Map<string, MetaEntityInsights>()
+  for (const row of res.data) {
+    const id = row[idKey] as string | undefined
+    if (id) map.set(id, rowToEntityInsights(row))
+  }
+  return { ok: true, data: map }
+}
+
+// Pulls every campaign, adset and ad for an account, each with its
+// effective_status + budget and both the last-7d and prev-7d insight windows.
+// This is the operational picture the account-level daily table cannot provide.
+export async function fetchAdEntities(adAccountId: string): Promise<MetaResult<MetaAdEntity[]>> {
+  const account = withActPrefix(adAccountId)
+
+  const now = new Date()
+  const last7Since = ymd(new Date(now.getTime() - 6 * 86400000))
+  const last7Until = ymd(now)
+  const prev7Since = ymd(new Date(now.getTime() - 13 * 86400000))
+  const prev7Until = ymd(new Date(now.getTime() - 7 * 86400000))
+
+  const entities: MetaAdEntity[] = []
+
+  for (const level of ['campaign', 'adset', 'ad'] as MetaEntityLevel[]) {
+    const cfg = ENTITY_EDGE[level]
+
+    const edgeRes = await graphGetAll<GraphEdgeRow>(`/${account}/${cfg.edge}`, { fields: cfg.fields })
+    if (!edgeRes.ok) return edgeRes
+
+    const [last7, prev7] = await Promise.all([
+      fetchLevelInsights(account, level, last7Since, last7Until),
+      fetchLevelInsights(account, level, prev7Since, prev7Until),
+    ])
+    if (!last7.ok) return last7
+    if (!prev7.ok) return prev7
+
+    for (const row of edgeRes.data) {
+      const id = row.id
+      if (!id) continue
+      entities.push({
+        level,
+        id,
+        name: row.name ?? '(unnamed)',
+        effectiveStatus: row.effective_status ?? 'UNKNOWN',
+        dailyBudget: minorToMajor(row.daily_budget),
+        lifetimeBudget: minorToMajor(row.lifetime_budget),
+        campaignId: row.campaign_id ?? null,
+        adsetId: row.adset_id ?? null,
+        last7d: last7.data.get(id) ?? { ...ZERO_INSIGHTS },
+        prev7d: prev7.data.get(id) ?? { ...ZERO_INSIGHTS },
+      })
+    }
+  }
+
+  return { ok: true, data: entities }
 }

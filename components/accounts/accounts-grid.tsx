@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Loader2, Plus, Circle, TrendingUp, AlertTriangle, Users, Calendar, CheckSquare, Trash2 } from 'lucide-react'
-import { fetchAccounts, deleteAccount, type AccountListItem } from '@/lib/accounts-client'
+import { Loader2, Plus, Circle, TrendingUp, AlertTriangle, Users, Calendar, CheckSquare, Trash2, X } from 'lucide-react'
+import { fetchAccounts, deleteAccount, createAccount, type AccountListItem } from '@/lib/accounts-client'
+import type { Client } from '@/lib/types'
 
 const HEALTH_COLOUR: Record<string, string> = {
   red:   'text-red-400',
@@ -45,6 +46,22 @@ export default function AccountsGrid() {
   const [healthFilter, setHealthFilter] = useState<'all' | 'red' | 'amber' | 'green'>('all')
   const [confirmingId, setConfirmingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [showNewClient, setShowNewClient] = useState(false)
+
+  function refreshAccounts() {
+    setLoading(true)
+    fetchAccounts()
+      .then((data) => {
+        const sorted = [...data].sort((a, b) => {
+          const h = (HEALTH_SORT[a.health] ?? 2) - (HEALTH_SORT[b.health] ?? 2)
+          if (h !== 0) return h
+          return a.name.localeCompare(b.name)
+        })
+        setAccounts(sorted)
+      })
+      .catch((e: Error) => setError(e.message))
+      .finally(() => setLoading(false))
+  }
 
   async function handleDelete(id: string) {
     setDeletingId(id)
@@ -60,17 +77,7 @@ export default function AccountsGrid() {
   }
 
   useEffect(() => {
-    fetchAccounts()
-      .then((data) => {
-        const sorted = [...data].sort((a, b) => {
-          const h = (HEALTH_SORT[a.health] ?? 2) - (HEALTH_SORT[b.health] ?? 2)
-          if (h !== 0) return h
-          return a.name.localeCompare(b.name)
-        })
-        setAccounts(sorted)
-      })
-      .catch((e: Error) => setError(e.message))
-      .finally(() => setLoading(false))
+    refreshAccounts()
   }, [])
 
   const displayed = healthFilter === 'all'
@@ -124,7 +131,7 @@ export default function AccountsGrid() {
           </Link>
           <button
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-[#181b27] hover:bg-[#1c2035] text-[#e4e6f0] border border-[#1c2035] transition-colors"
-            onClick={() => { /* TODO: new account modal */ }}
+            onClick={() => setShowNewClient(true)}
           >
             <Plus size={12} />
             New client
@@ -276,6 +283,174 @@ export default function AccountsGrid() {
           No {healthFilter !== 'all' ? healthFilter + ' ' : ''}accounts found.
         </div>
       )}
+
+      {showNewClient && (
+        <NewClientModal
+          onClose={() => setShowNewClient(false)}
+          onSaved={() => {
+            setShowNewClient(false)
+            refreshAccounts()
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ─── New client modal ───────────────────────────────────────────────────────
+
+const VALID_SERVICES = [
+  { value: 'paid_ads', label: 'Paid ads' },
+  { value: 'creatives', label: 'Creatives' },
+] as const
+
+function NewClientModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const [name, setName] = useState('')
+  const [contactName, setContactName] = useState('')
+  const [contactEmail, setContactEmail] = useState('')
+  const [services, setServices] = useState<string[]>([])
+  const [status, setStatus] = useState<Client['status']>('active')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const nameRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    nameRef.current?.focus()
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  }, [onClose])
+
+  function toggleService(value: string) {
+    setServices((prev) => (prev.includes(value) ? prev.filter((s) => s !== value) : [...prev, value]))
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!name.trim()) {
+      setError('Client name is required.')
+      return
+    }
+    setSaving(true)
+    setError(null)
+    try {
+      await createAccount({
+        name: name.trim(),
+        contact_name: contactName.trim() || null,
+        contact_email: contactEmail.trim() || null,
+        services,
+        status,
+      })
+      onSaved()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const inputCls =
+    'w-full bg-[#181b27] border border-[#1c2035] rounded-lg px-3 py-2 text-sm text-[#e4e6f0] focus:outline-none focus:ring-1 focus:ring-indigo-500 placeholder:text-[#636780]'
+  const labelCls = 'block text-xs font-medium text-[#636780] uppercase tracking-wider mb-1.5'
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative z-10 w-full max-w-lg rounded-xl border border-[#1c2035] bg-[#10121a] p-5 shadow-2xl">
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-[#e4e6f0] font-medium text-sm">New client</h2>
+          <button onClick={onClose} className="text-[#636780] hover:text-[#e4e6f0] transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className={labelCls}>Name *</label>
+            <input
+              ref={nameRef}
+              className={inputCls}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Client / brand name"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Contact name</label>
+              <input
+                className={inputCls}
+                value={contactName}
+                onChange={(e) => setContactName(e.target.value)}
+                placeholder="Jane Doe"
+              />
+            </div>
+            <div>
+              <label className={labelCls}>Contact email</label>
+              <input
+                className={inputCls}
+                type="email"
+                value={contactEmail}
+                onChange={(e) => setContactEmail(e.target.value)}
+                placeholder="jane@client.com"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className={labelCls}>Services</label>
+            <div className="flex gap-2">
+              {VALID_SERVICES.map((s) => (
+                <button
+                  key={s.value}
+                  type="button"
+                  onClick={() => toggleService(s.value)}
+                  className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${
+                    services.includes(s.value)
+                      ? 'bg-indigo-600/30 border-indigo-500 text-indigo-300'
+                      : 'bg-[#181b27] border-[#1c2035] text-[#636780] hover:border-[#3d4060] hover:text-[#e4e6f0]'
+                  }`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className={labelCls}>Status</label>
+            <select
+              className={inputCls}
+              value={status}
+              onChange={(e) => setStatus(e.target.value as Client['status'])}
+            >
+              <option value="active">Active</option>
+              <option value="paused">Paused</option>
+              <option value="churned">Churned</option>
+            </select>
+          </div>
+
+          {error && <p className="text-red-400 text-xs">{error}</p>}
+
+          <div className="flex gap-3 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="text-[#636780] hover:text-[#e4e6f0] hover:bg-[#181b27] rounded-lg px-3 py-2 text-sm transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex-1 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+            >
+              {saving ? 'Creating...' : 'Create client'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   )
 }
