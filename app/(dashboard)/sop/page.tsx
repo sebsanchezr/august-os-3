@@ -4,6 +4,11 @@ import Link from 'next/link'
 
 const sops = [
   {
+    href: '/sop/os-guide',
+    title: 'August OS Team Guide',
+    description: 'The daily operating manual: morning routines per role, task flow, client cadence, creatives, ads, and troubleshooting.',
+  },
+  {
     href: '/sop/cold-call',
     title: 'Cold Call SOP',
     description: 'Opening line, objection handling, and the post-payment onboarding sequence.',
