@@ -241,14 +241,17 @@ export function shopifyEnvKey(name: string): string {
 }
 
 // Fetch up to 10 products (title, price, product type, image) from the client's
-// Shopify store via the Admin REST API. Returns null when the store env vars are
-// unset for this client. Read-only. Cached 24h by client id.
+// Shopify store. Tries the Admin REST API (SHOPIFY_ACCESS_TOKEN_<KEY>) first,
+// then falls back to the Storefront GraphQL API (SHOPIFY_STOREFRONT_TOKEN_<KEY>,
+// best-selling sort) when the admin token is missing or lacks the read_products
+// scope. Returns null when no usable env vars exist. Read-only. Cached 24h.
 export async function fetchShopifyResearch(client: ResearchClient): Promise<ShopifySummary | null> {
   const key = shopifyEnvKey(client.name)
   if (!key) return null
   const token = process.env[`SHOPIFY_ACCESS_TOKEN_${key}`]?.trim()
+  const storefrontToken = process.env[`SHOPIFY_STOREFRONT_TOKEN_${key}`]?.trim()
   let domain = process.env[`SHOPIFY_DOMAIN_${key}`]?.trim()
-  if (!token || !domain) return null
+  if ((!token && !storefrontToken) || !domain) return null
 
   // Normalise domain: accept "store", "store.myshopify.com", or a full URL.
   domain = domain.replace(/^https?:\/\//, '').replace(/\/+$/, '')
@@ -259,26 +262,61 @@ export async function fetchShopifyResearch(client: ResearchClient): Promise<Shop
 
   let summary: ShopifySummary | null = null
   try {
-    const url = `https://${domain}/admin/api/2024-10/products.json?limit=10&status=active`
-    const res = await fetch(url, {
-      headers: { 'X-Shopify-Access-Token': token, Accept: 'application/json' },
-    })
-    if (!res.ok) {
-      console.warn(`[research] Shopify ${key}: HTTP ${res.status}`)
-    } else {
-      const json = await res.json()
-      const products: ShopifyProduct[] = (json?.products ?? []).map((p: Record<string, unknown>) => {
-        const variants = (p.variants as Array<{ price?: string }> | undefined) ?? []
-        const images = (p.images as Array<{ src?: string }> | undefined) ?? []
-        const image = (p.image as { src?: string } | undefined) ?? images[0]
-        return {
-          title: String(p.title ?? '').trim(),
-          price: variants[0]?.price ?? null,
-          productType: (p.product_type ? String(p.product_type) : null) || null,
-          imageUrl: image?.src ?? null,
-        }
-      }).filter((p: ShopifyProduct) => p.title)
-      summary = { productCount: products.length, products }
+    if (token) {
+      const url = `https://${domain}/admin/api/2024-10/products.json?limit=10&status=active`
+      const res = await fetch(url, {
+        headers: { 'X-Shopify-Access-Token': token, Accept: 'application/json' },
+      })
+      if (!res.ok) {
+        console.warn(`[research] Shopify admin ${key}: HTTP ${res.status}`)
+      } else {
+        const json = await res.json()
+        const products: ShopifyProduct[] = (json?.products ?? []).map((p: Record<string, unknown>) => {
+          const variants = (p.variants as Array<{ price?: string }> | undefined) ?? []
+          const images = (p.images as Array<{ src?: string }> | undefined) ?? []
+          const image = (p.image as { src?: string } | undefined) ?? images[0]
+          return {
+            title: String(p.title ?? '').trim(),
+            price: variants[0]?.price ?? null,
+            productType: (p.product_type ? String(p.product_type) : null) || null,
+            imageUrl: image?.src ?? null,
+          }
+        }).filter((p: ShopifyProduct) => p.title)
+        summary = { productCount: products.length, products }
+      }
+    }
+    if (!summary && storefrontToken) {
+      const res = await fetch(`https://${domain}/api/2024-10/graphql.json`, {
+        method: 'POST',
+        headers: {
+          'X-Shopify-Storefront-Access-Token': storefrontToken,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: `{ products(first: 10, sortKey: BEST_SELLING) { edges { node {
+            title productType
+            priceRange { minVariantPrice { amount currencyCode } }
+            featuredImage { url }
+          } } } }`,
+        }),
+      })
+      if (!res.ok) {
+        console.warn(`[research] Shopify storefront ${key}: HTTP ${res.status}`)
+      } else {
+        const json = await res.json()
+        const edges: Array<{ node: Record<string, unknown> }> = json?.data?.products?.edges ?? []
+        const products: ShopifyProduct[] = edges.map(({ node }) => {
+          const priceRange = node.priceRange as { minVariantPrice?: { amount?: string } } | undefined
+          const featured = node.featuredImage as { url?: string } | undefined
+          return {
+            title: String(node.title ?? '').trim(),
+            price: priceRange?.minVariantPrice?.amount ?? null,
+            productType: (node.productType ? String(node.productType) : null) || null,
+            imageUrl: featured?.url ?? null,
+          }
+        }).filter((p) => p.title)
+        if (products.length) summary = { productCount: products.length, products }
+      }
     }
   } catch (err) {
     console.warn('[research] Shopify fetch failed:', (err as Error).message)
