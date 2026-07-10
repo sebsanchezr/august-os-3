@@ -15,8 +15,8 @@ import { filterNav } from '@/lib/access'
 
 // ─── Nav structure ────────────────────────────────────────────────────────────
 
-type NavItem = { label: string; href: string; icon: React.ElementType }
-type NavSection = { id: string; label: string; items: NavItem[] }
+type NavItem = { label: string; href: string }
+type NavSection = { id: string; label: string; icon: React.ElementType; items: NavItem[] }
 type NavCategory = { label: string; sections: NavSection[] }
 
 const NAV: NavCategory[] = [
@@ -26,56 +26,63 @@ const NAV: NavCategory[] = [
       {
         id: 'fulfilment-dashboard',
         label: 'Overview',
+        icon: LayoutDashboard,
         items: [
-          { label: 'Dashboard', href: '/fulfilment', icon: LayoutDashboard },
+          { label: 'Dashboard', href: '/fulfilment' },
         ],
       },
       {
         id: 'tasks',
         label: 'Tasks',
+        icon: KanbanSquare,
         items: [
-          { label: 'Board',   href: '/tasks',         icon: KanbanSquare },
-          { label: 'List',    href: '/tasks/list',    icon: ClipboardList },
-          { label: 'Archive', href: '/tasks/archive', icon: Archive       },
+          { label: 'Board',   href: '/tasks'         },
+          { label: 'List',    href: '/tasks/list'    },
+          { label: 'Archive', href: '/tasks/archive' },
         ],
       },
       {
         id: 'meetings',
         label: 'Meetings',
+        icon: CalendarDays,
         items: [
-          { label: 'Upcoming', href: '/meetings',      icon: CalendarDays },
-          { label: 'Past',     href: '/meetings/past', icon: Archive      },
+          { label: 'Upcoming', href: '/meetings'      },
+          { label: 'Past',     href: '/meetings/past' },
         ],
       },
       {
         id: 'paid-ads',
         label: 'Paid Ads',
+        icon: TrendingUp,
         items: [
-          { label: 'Client Ads', href: '/ads', icon: TrendingUp },
+          { label: 'Client Ads', href: '/ads' },
         ],
       },
       {
         id: 'creatives',
         label: 'Creatives',
+        icon: Palette,
         items: [
-          { label: 'Creative Hub', href: '/creatives', icon: Palette },
+          { label: 'Creative Hub', href: '/creatives' },
         ],
       },
       {
         id: 'onboarding',
         label: 'Onboarding',
+        icon: Rocket,
         items: [
-          { label: 'Pipeline', href: '/onboarding', icon: Rocket },
+          { label: 'Pipeline', href: '/onboarding' },
         ],
       },
       {
         id: 'accounts',
         label: 'Accounts',
+        icon: Briefcase,
         items: [
-          { label: 'Clients',   href: '/accounts',             icon: Briefcase      },
-          { label: 'Comms',     href: '/accounts/comms',       icon: MessageSquare  },
-          { label: 'Approvals', href: '/accounts/approvals',   icon: CheckSquare    },
-          { label: 'Issues',    href: '/accounts/issues',      icon: AlertTriangle  },
+          { label: 'Clients',   href: '/accounts'           },
+          { label: 'Comms',     href: '/accounts/comms'     },
+          { label: 'Approvals', href: '/accounts/approvals' },
+          { label: 'Issues',    href: '/accounts/issues'    },
         ],
       },
     ],
@@ -86,60 +93,67 @@ const NAV: NavCategory[] = [
       {
         id: 'overview',
         label: 'Overview',
+        icon: TrendingUp,
         items: [
-          { label: 'Command Center', href: '/acquisition', icon: TrendingUp    },
-          { label: 'Pipeline',       href: '/pipeline',     icon: KanbanSquare },
+          { label: 'Command Center', href: '/acquisition' },
+          { label: 'Pipeline',       href: '/pipeline'    },
         ],
       },
       {
         id: 'cold-calling',
         label: 'Cold Calling',
+        icon: PhoneCall,
         items: [
-          { label: 'Dashboard',  href: '/dashboard', icon: LayoutDashboard },
-          { label: 'EOD Reports', href: '/eod',       icon: ClipboardList  },
-          { label: 'Websites',   href: '/websites',   icon: Globe          },
-          { label: 'Resources',  href: '/resources',  icon: BookOpen       },
+          { label: 'Dashboard',  href: '/dashboard' },
+          { label: 'EOD Reports', href: '/eod'      },
+          { label: 'Websites',   href: '/websites'  },
+          { label: 'Resources',  href: '/resources' },
         ],
       },
       {
         id: 'cold-email',
         label: 'Cold Email',
+        icon: Inbox,
         items: [
-          { label: 'Dashboard', href: '/cold-email',          icon: LayoutDashboard },
-          { label: 'Pipeline',  href: '/cold-email/pipeline', icon: KanbanSquare    },
-          { label: 'Replies',   href: '/cold-email/replies',  icon: Inbox           },
-          { label: 'Leads',     href: '/cold-email/leads',    icon: Users           },
+          { label: 'Dashboard', href: '/cold-email'          },
+          { label: 'Pipeline',  href: '/cold-email/pipeline' },
+          { label: 'Replies',   href: '/cold-email/replies'  },
+          { label: 'Leads',     href: '/cold-email/leads'    },
         ],
       },
       {
         id: 'linkedin',
         label: 'LinkedIn',
+        icon: MessageSquare,
         items: [
-          { label: 'Dashboard',      href: '/linkedin',               icon: LayoutDashboard },
-          { label: 'Conversations',  href: '/linkedin/conversations', icon: MessageSquare   },
+          { label: 'Dashboard',      href: '/linkedin'               },
+          { label: 'Conversations',  href: '/linkedin/conversations' },
         ],
       },
       {
         id: 'sales',
         label: 'Sales',
+        icon: TrendingUp,
         items: [
-          { label: 'Sales Calls', href: '/sales',          icon: PhoneCall },
-          { label: 'Insights',    href: '/sales/insights', icon: TrendingUp },
+          { label: 'Sales Calls', href: '/sales'          },
+          { label: 'Insights',    href: '/sales/insights' },
         ],
       },
       {
         id: 'gov-contracts',
         label: 'Gov Contracts',
+        icon: FileText,
         items: [
-          { label: 'Dashboard',    href: '/gov-contracts',      icon: LayoutDashboard },
-          { label: 'Bid Manager',  href: '/gov-contracts/bids', icon: FileText        },
+          { label: 'Dashboard',    href: '/gov-contracts'      },
+          { label: 'Bid Manager',  href: '/gov-contracts/bids' },
         ],
       },
       {
         id: 'upwork',
         label: 'Upwork',
+        icon: Globe,
         items: [
-          { label: 'Opportunities', href: '/upwork', icon: Globe },
+          { label: 'Opportunities', href: '/upwork' },
         ],
       },
     ],
@@ -186,7 +200,8 @@ function CollapsibleSection({
         onClick={() => setOpen(v => !v)}
         className="w-full flex items-center justify-between px-3 pt-3 pb-1 text-left group"
       >
-        <span className="text-[9px] font-semibold tracking-[0.13em] text-[#3d4060] uppercase group-hover:text-[#636780] transition-colors">
+        <span className="flex items-center gap-1.5 text-[9px] font-semibold tracking-[0.13em] text-[#3d4060] uppercase group-hover:text-[#636780] transition-colors">
+          <section.icon style={{ width: 11, height: 11 }} className="shrink-0" />
           {section.label}
         </span>
         <ChevronDown
@@ -197,17 +212,16 @@ function CollapsibleSection({
 
       {open && (
         <div>
-          {section.items.map(({ label, href, icon: Icon }) => (
+          {section.items.map(({ label, href }) => (
             <Link
               key={href}
               href={href}
-              className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
+              className={`flex items-center gap-2.5 pl-[26px] pr-3 py-2 rounded-lg text-sm transition-colors ${
                 itemIsActive(href, pathname)
                   ? 'bg-[#181b27] text-[#e4e6f0] font-medium'
                   : 'text-[#636780] hover:text-[#e4e6f0] hover:bg-[#181b27]'
               }`}
             >
-              <Icon className="h-[15px] w-[15px] shrink-0" />
               {label}
             </Link>
           ))}

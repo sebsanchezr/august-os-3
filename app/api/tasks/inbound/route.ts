@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 // Used by: 06_meeting_tasks agent after Discord approval, future automations.
 // Creates a task with source=meeting|agent and returns the created task.
 
-const CREATIVE_STATUSES = ['brief', 'editing', 'revision', 'approved_by_client', 'sent_to_media_buyer', 'live'] as const
+const CREATIVE_STATUSES = ['brief', 'editing', 'revision', 'sent_for_approval', 'approved_by_client', 'sent_to_media_buyer', 'live'] as const
 const OPS_STATUSES = ['brief', 'in_progress', 'review', 'completed'] as const
 
 function validStatusForTrack(track: string, status: string): boolean {

@@ -1,7 +1,7 @@
 
 // Task Manager types
 export type TaskTrack = 'creative' | 'ops'
-export type CreativeStatus = 'brief' | 'editing' | 'revision' | 'approved_by_client' | 'sent_to_media_buyer' | 'live'
+export type CreativeStatus = 'brief' | 'editing' | 'revision' | 'sent_for_approval' | 'approved_by_client' | 'sent_to_media_buyer' | 'live'
 export type OpsStatus = 'brief' | 'in_progress' | 'review' | 'completed'
 export type TaskStatus = CreativeStatus | OpsStatus
 export type TaskDepartment = 'creative' | 'paid_ads' | 'client' | 'company' | 'admin' | 'ceo'
@@ -298,6 +298,7 @@ export const CREATIVE_COLUMNS: { status: CreativeStatus; label: string }[] = [
   { status: 'brief',               label: 'Brief' },
   { status: 'editing',             label: 'Editing' },
   { status: 'revision',            label: 'Revision' },
+  { status: 'sent_for_approval',   label: 'Sent for Approval' },
   { status: 'approved_by_client',  label: 'Approved by Client' },
   { status: 'sent_to_media_buyer', label: 'Sent to Media Buyer' },
   { status: 'live',                label: 'Live' },
