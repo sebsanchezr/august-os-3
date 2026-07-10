@@ -9,6 +9,7 @@ import { notifyCreativesGenerated } from '@/lib/discord-notify'
 // Vercel Hobby caps API routes at 60s. We generate concepts concurrently to
 // stay inside that budget.
 export const maxDuration = 60
+export const dynamic = 'force-dynamic'
 
 // POST /api/creatives/generate
 // Two modes:

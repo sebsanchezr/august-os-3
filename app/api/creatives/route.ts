@@ -3,6 +3,8 @@ import { createSupabaseAdmin } from '@/lib/supabase-server'
 import { ASSET_KINDS, isMissingTableError, weekStartOf, MIGRATION_MISSING_MESSAGE } from '@/lib/creatives'
 import type { AssetKind } from '@/lib/creatives'
 
+export const dynamic = 'force-dynamic'
+
 // GET /api/creatives?scope=assets|strategies|clients
 // - assets: every creative library link, joined with client name.
 // - strategies: current week's strategy row (if any) per non-archived client.

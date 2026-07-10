@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdmin } from '@/lib/supabase-server'
 import type { Caller } from '@/lib/types'
 
+export const dynamic = 'force-dynamic'
+
 // GET /api/callers
 // Returns all callers (used to populate caller-assignment dropdowns)
 export async function GET(_req: NextRequest) {
