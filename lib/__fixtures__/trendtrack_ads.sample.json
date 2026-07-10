@@ -1,0 +1,231 @@
+{
+  "terms": [
+    "activewear leggings",
+    "gym leggings",
+    "haircare"
+  ],
+  "ads": {
+    "activewear leggings": [
+      {
+        "id": "facebook_1494691915303898",
+        "platform": "facebook",
+        "status": "active",
+        "daysRunning": 332,
+        "media": {
+          "type": "image",
+          "mediaUrl": "https://medias.trendtrack.io/image/facebook/1286354063166450.jpg"
+        },
+        "advertiser": {
+          "name": "Unaltered",
+          "reach30d": 429687,
+          "totalReach": 5605735
+        },
+        "content": {
+          "title": null,
+          "body": "Activewear that actually fits you.\nFrom XXS to XXXL — because strength comes in every size. 💪\n\nSay goodbye to see-through leggings, awkward waistbands, and ‘meh’ fits. \n\nOur premium seamless designs are made to move with you, hug in all the right places, and flatter every curve. No roll-downs, no riding up — just buttery-soft fabric, sculpting support, and serious main character energy.\n\n✨ Flatter",
+          "callToAction": "SHOP NOW"
+        },
+        "metrics": {
+          "reach": 62692,
+          "estimatedSpend": 564
+        }
+      },
+      {
+        "id": "facebook_1286769546500127",
+        "platform": "facebook",
+        "status": "active",
+        "daysRunning": 307,
+        "media": {
+          "type": "image",
+          "mediaUrl": "https://medias.trendtrack.io/image/facebook/2136492210170779.jpg"
+        },
+        "advertiser": {
+          "name": "Unaltered",
+          "reach30d": 429687,
+          "totalReach": 5605735
+        },
+        "content": {
+          "title": null,
+          "body": "Activewear that actually fits you.\nFrom XXS to XXXL — because strength comes in every size. 💪\n\nSay goodbye to see-through leggings, awkward waistbands, and ‘meh’ fits. \n\nOur premium seamless designs are made to move with you, hug in all the right places, and flatter every curve. No roll-downs, no riding up — just buttery-soft fabric, sculpting support, and serious main character energy.\n\n✨ Flatter",
+          "callToAction": "SHOP NOW"
+        },
+        "metrics": {
+          "reach": 51749,
+          "estimatedSpend": 466
+        }
+      },
+      {
+        "id": "facebook_2004890913580938",
+        "platform": "facebook",
+        "status": "active",
+        "daysRunning": 284,
+        "media": {
+          "type": "image",
+          "mediaUrl": "https://medias.trendtrack.io/image/facebook/711910718580375.jpg"
+        },
+        "advertiser": {
+          "name": "Natal Active",
+          "reach30d": 62082,
+          "totalReach": 617538
+        },
+        "content": {
+          "title": null,
+          "body": "✨ NEW IN ✨ Our sell out, five ⭐ rated, squat proof maternity leggings now available in a brand new colour - Chocolate Brown 🤎 The Luxe Leggings have been designed to see you through every stage of your pregnancy and still fit perfectly postnatally!\n\n★★★★★ “Best maternity leggings” - AMY L.\n\n✨ Wear during & after pregnancy \n✨ Totally squat proof \n✨ Luxe soft wicking fabric\n✨ Gentle Bump support \n\nN",
+          "callToAction": "SHOP NOW"
+        },
+        "metrics": {
+          "reach": 10047,
+          "estimatedSpend": 90
+        }
+      }
+    ],
+    "gym leggings": [
+      {
+        "id": "facebook_666605066269020",
+        "platform": "facebook",
+        "status": "active",
+        "daysRunning": 423,
+        "media": {
+          "type": "image",
+          "mediaUrl": "https://medias.trendtrack.io/image/facebook/1865314494277673.jpg"
+        },
+        "advertiser": {
+          "name": "Gymfit Sverige",
+          "reach30d": 1272547,
+          "totalReach": 24414480
+        },
+        "content": {
+          "title": null,
+          "body": "Leggings med lyftande design!\n\nTa din träning till nästa nivå med våra seamless leggings för kvinnor. Dessa högmidjade leggings är designade för att ge extra stöd, en smickrande passform och en lyftande effekt för en självsäker look. Med squat-proof och snabbtorkande material är de perfekta för yoga, gym, löpning och vardagsbruk.",
+          "callToAction": "SHOP NOW"
+        },
+        "metrics": {
+          "reach": 12641,
+          "estimatedSpend": 114
+        }
+      },
+      {
+        "id": "facebook_1652828182074288",
+        "platform": "facebook",
+        "status": "active",
+        "daysRunning": 335,
+        "media": {
+          "type": "image",
+          "mediaUrl": "https://medias.trendtrack.io/image/facebook/757009303366433.jpg"
+        },
+        "advertiser": {
+          "name": "the.fit.theory",
+          "reach30d": 0,
+          "totalReach": 0
+        },
+        "content": {
+          "title": null,
+          "body": "Get moving in comfort! 🏋️‍♀️\nOur Sunday Leggings are perfect for:\nGym sessions 💪 \nCasual Sundays with friends 👫\n\nVersatile, comfortable & confident wear for everyday activities #ComfortFirst",
+          "callToAction": "SHOP NOW"
+        },
+        "metrics": {
+          "reach": 0,
+          "estimatedSpend": 0
+        }
+      },
+      {
+        "id": "facebook_1283210743199948",
+        "platform": "facebook",
+        "status": "active",
+        "daysRunning": 321,
+        "media": {
+          "type": "image",
+          "mediaUrl": "https://medias.trendtrack.io/image/facebook/1211410720028430.jpg"
+        },
+        "advertiser": {
+          "name": "FIERCEPULSE",
+          "reach30d": 38007,
+          "totalReach": 486965
+        },
+        "content": {
+          "title": null,
+          "body": "Dachshund-lovers rejoice! 🐾 Our soft and comfortable leggings are perfect for the gym, yoga, or lounging around the house.\n\n🐱 High-waisted and squat-proof\n🐱 Double-layered waistband\n🐱 4-way stretch fabric",
+          "callToAction": "SHOP NOW"
+        },
+        "metrics": {
+          "reach": 3961,
+          "estimatedSpend": 36
+        }
+      }
+    ],
+    "haircare": [
+      {
+        "id": "facebook_398213087628748",
+        "platform": "facebook",
+        "status": "active",
+        "daysRunning": 2881,
+        "media": {
+          "type": "image",
+          "mediaUrl": "https://medias.trendtrack.io/image/facebook/640512644964461.jpg"
+        },
+        "advertiser": {
+          "name": "Just for Redheads",
+          "reach30d": 0,
+          "totalReach": 0
+        },
+        "content": {
+          "title": null,
+          "body": "Just for Redheads is a leading beauty company offering makeup, skincare, and haircare.  Finally, beauty products designed by a Redhead -- just for Redheads!",
+          "callToAction": null
+        },
+        "metrics": {
+          "reach": 0,
+          "estimatedSpend": 0
+        }
+      },
+      {
+        "id": "facebook_263596588792692",
+        "platform": "facebook",
+        "status": "active",
+        "daysRunning": 1894,
+        "media": {
+          "type": "image",
+          "mediaUrl": "https://medias.trendtrack.io/image/facebook/500037264684577.jpg"
+        },
+        "advertiser": {
+          "name": "Beauty Pro’s",
+          "reach30d": 0,
+          "totalReach": 0
+        },
+        "content": {
+          "title": null,
+          "body": "Bezoek onze website voor de beste skin-/haircare producten van dit moment. Gebruik kortingscode BEAUTY15 voor extra korting.",
+          "callToAction": "SHOP NOW"
+        },
+        "metrics": {
+          "reach": 0,
+          "estimatedSpend": 0
+        }
+      },
+      {
+        "id": "facebook_1141452356594695",
+        "platform": "facebook",
+        "status": "active",
+        "daysRunning": 1604,
+        "media": {
+          "type": "image",
+          "mediaUrl": "https://medias.trendtrack.io/image/facebook/485101029947910.jpg"
+        },
+        "advertiser": {
+          "name": "Khali Min",
+          "reach30d": 0,
+          "totalReach": 0
+        },
+        "content": {
+          "title": null,
+          "body": "Plant-derived haircare with roots in Cairo and London. Formulated using performance-driven botanicals, avoiding unnecessary synthetics and additives. Made in England.",
+          "callToAction": "SHOP NOW"
+        },
+        "metrics": {
+          "reach": 0,
+          "estimatedSpend": 0
+        }
+      }
+    ]
+  }
+}

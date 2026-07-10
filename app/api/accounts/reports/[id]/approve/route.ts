@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdmin } from '@/lib/supabase-server'
 import { notifyApprovedComms } from '@/lib/discord-notify'
 
+export const dynamic = 'force-dynamic'
+
 // POST /api/accounts/reports/[id]/approve
 // Body: { approved_by: uuid, client_message?: string (if edited inline before approving) }
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {

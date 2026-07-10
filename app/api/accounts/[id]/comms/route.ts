@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdmin } from '@/lib/supabase-server'
 import { notifyClientFlag } from '@/lib/discord-notify'
 
+export const dynamic = 'force-dynamic'
+
 const VALID_DIRECTIONS = ['inbound', 'outbound'] as const
 const VALID_CHANNELS = ['whatsapp', 'email', 'call', 'meeting'] as const
 const VALID_SENTIMENTS = ['positive', 'neutral', 'concern'] as const

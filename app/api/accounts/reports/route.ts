@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdmin } from '@/lib/supabase-server'
 
+export const dynamic = 'force-dynamic'
+
 // GET /api/accounts/reports
 // ?status=pending_approval  &client_id=xxx  &type=weekly_eow
 export async function GET(req: NextRequest) {

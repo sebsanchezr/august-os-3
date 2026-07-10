@@ -4,6 +4,8 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import type { CallActivity, CallOutcome, LeadStatus } from '@/lib/types'
 
+export const dynamic = 'force-dynamic'
+
 // Map call outcome to lead status
 function outcomeToLeadStatus(outcome: CallOutcome): LeadStatus | null {
   const map: Partial<Record<CallOutcome, LeadStatus>> = {

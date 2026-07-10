@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createLeadPipelineAdmin } from '@/lib/supabase-server'
 
+export const dynamic = 'force-dynamic'
+
 // The LinkedIn Ghost engine (lead_pipeline/scripts/linkedin) writes leads,
 // lead_activities and reply_conversations into the separate lead_pipeline
 // Supabase project, not the OS project. This route must read from that

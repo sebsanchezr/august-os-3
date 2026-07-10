@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdmin } from '@/lib/supabase-server'
 import { buildIcs, googleCalendarUrl } from '@/lib/ics'
 
+export const dynamic = 'force-dynamic'
+
 const VALID_TYPES = ['weekly', 'monthly', 'adhoc'] as const
 
 // POST /api/accounts/[id]/meetings/invite

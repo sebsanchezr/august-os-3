@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdmin } from '@/lib/supabase-server'
 
+export const dynamic = 'force-dynamic'
+
 // POST /api/tasks/inbound
 // Authenticated by X-Agent-Key header (set AGENT_INBOUND_KEY in env).
 // Used by: 06_meeting_tasks agent after Discord approval, future automations.

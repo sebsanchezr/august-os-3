@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdmin } from '@/lib/supabase-server'
 
+export const dynamic = 'force-dynamic'
+
 const VALID_STAGES = [
   'new_reply', 'qualified', 'creatives_in_production', 'creatives_delivered',
   'call_booked', 'showed', 'proposal', 'won', 'lost', 'nurture',

@@ -13,6 +13,8 @@ import {
 } from '@/lib/statics-gen'
 import { notifyCreativesGenerated } from '@/lib/discord-notify'
 
+export const dynamic = 'force-dynamic'
+
 // Nano banana image calls run one per requested image inside this window.
 export const maxDuration = 60
 

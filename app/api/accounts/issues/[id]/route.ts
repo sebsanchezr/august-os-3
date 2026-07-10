@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdmin } from '@/lib/supabase-server'
 
+export const dynamic = 'force-dynamic'
+
 // PATCH /api/accounts/issues/[id]
 // Enforces: resolving an issue requires root_cause AND process_fix to be present.
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {

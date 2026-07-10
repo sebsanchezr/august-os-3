@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdmin } from '@/lib/supabase-server'
 import { isMissingTableError, MIGRATION_MISSING_MESSAGE } from '@/lib/creatives'
 
+export const dynamic = 'force-dynamic'
+
 // PATCH /api/creatives/strategy/[id]
 // Body: { action: 'approve' }
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {

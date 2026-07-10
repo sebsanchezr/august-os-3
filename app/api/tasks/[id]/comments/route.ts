@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdmin } from '@/lib/supabase-server'
 import { notifyComment } from '@/lib/discord-notify'
 
+export const dynamic = 'force-dynamic'
+
 // POST /api/tasks/[id]/comments
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const supabase = createSupabaseAdmin()

@@ -3,6 +3,7 @@ import { createSupabaseAdmin } from '@/lib/supabase-server'
 import { isMissingTableError, MIGRATION_MISSING_MESSAGE } from '@/lib/creatives'
 import type { GenConcept } from '@/lib/creatives'
 import { parseStrategyConcepts, expandBriefConcepts } from '@/lib/creatives-server'
+import { buildResearchContext, type ResearchClient } from '@/lib/research-server'
 import { generateImage, buildImagePrompt, uploadImage, ImageGenError } from '@/lib/creatives-images'
 import { notifyCreativesGenerated } from '@/lib/discord-notify'
 
@@ -37,6 +38,7 @@ export async function POST(req: NextRequest) {
   let resolvedClientId = client_id
   let clientName = ''
   let clientNotes: string | null = null
+  let researchClient: ResearchClient | null = null
   let concepts: GenConcept[]
   const source: 'strategy' | 'quick' = strategy_id ? 'strategy' : 'quick'
 
@@ -44,7 +46,7 @@ export async function POST(req: NextRequest) {
     if (strategy_id) {
       const { data: strat, error: stratErr } = await supabase
         .from('creative_strategies')
-        .select('*, client:clients(id, name, notes)')
+        .select('*, client:clients(id, name, notes, trendtrak_ids)')
         .eq('id', strategy_id)
         .single()
       if (stratErr || !strat) {
@@ -54,24 +56,31 @@ export async function POST(req: NextRequest) {
       if (!strat.strategy_md) return NextResponse.json({ error: 'Strategy has no content to generate from.' }, { status: 400 })
 
       resolvedClientId = strat.client_id
-      const c = strat.client as { name?: string; notes?: string | null } | null
+      const c = strat.client as { name?: string; notes?: string | null; trendtrak_ids?: string[] | null } | null
       clientName = c?.name ?? 'the client'
       clientNotes = c?.notes ?? null
+      researchClient = { id: String(strat.client_id), name: clientName, trendtrak_ids: c?.trendtrak_ids ?? null }
 
       // Flip to generating so the UI reflects work in flight.
       await supabase.from('creative_strategies').update({ status: 'generating' }).eq('id', strategy_id)
 
-      concepts = await parseStrategyConcepts(strat.strategy_md, clientName)
+      // Research grounding (TrendTrack + Shopify). Null when neither is configured.
+      const research = await buildResearchContext(researchClient)
+      concepts = await parseStrategyConcepts(strat.strategy_md, clientName, research)
     } else {
       const { data: clientRow, error: clientErr } = await supabase
         .from('clients')
-        .select('id, name, notes')
+        .select('id, name, notes, trendtrak_ids')
         .eq('id', resolvedClientId)
         .single()
       if (clientErr || !clientRow) return NextResponse.json({ error: clientErr?.message ?? 'Client not found' }, { status: 404 })
       clientName = clientRow.name
       clientNotes = clientRow.notes ?? null
-      concepts = await expandBriefConcepts(brief, clientName, quantity)
+      researchClient = { id: clientRow.id, name: clientRow.name, trendtrak_ids: clientRow.trendtrak_ids ?? null }
+
+      // Research grounding (TrendTrack + Shopify). Null when neither is configured.
+      const research = await buildResearchContext(researchClient)
+      concepts = await expandBriefConcepts(brief, clientName, quantity, research)
     }
   } catch (err) {
     // Concept parsing failed before any image work. Revert generating flag.

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdmin } from '@/lib/supabase-server'
 
+export const dynamic = 'force-dynamic'
+
 type Window = 'yesterday' | '7d' | '30d'
 
 function getDateRange(win: Window): { start: string; days: number } {

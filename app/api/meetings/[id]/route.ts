@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdmin } from '@/lib/supabase-server'
 import { notifyMeetingCancelled } from '@/lib/discord-notify'
 
+export const dynamic = 'force-dynamic'
+
 // PATCH /api/meetings/[id]
 // Cross-client meeting hub endpoint (no client_id required in the URL, unlike
 // /api/accounts/[id]/meetings). Currently only supports the cancellation

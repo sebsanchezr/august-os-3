@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdmin } from '@/lib/supabase-server'
 
+export const dynamic = 'force-dynamic'
+
 const VALID_STATUSES = ['new', 'surfaced', 'applied', 'replied', 'call_booked', 'won', 'passed'] as const
 
 // PATCH /api/upwork/[id]

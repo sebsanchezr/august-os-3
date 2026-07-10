@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdmin } from '@/lib/supabase-server'
 import { notifyMeetingPrepReady } from '@/lib/discord-notify'
 
+export const dynamic = 'force-dynamic'
+
 const VALID_TYPES = ['weekly', 'monthly', 'adhoc'] as const
 const VALID_STATUSES = ['scheduled', 'done', 'cancelled'] as const
 const VALID_RECURRENCES = ['weekly', 'monthly'] as const

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdmin } from '@/lib/supabase-server'
 import { draftReply } from '@/lib/upwork-ai'
 
+export const dynamic = 'force-dynamic'
+
 // POST /api/upwork/[id]/messages
 // Body: { inbound_body: string }
 // Seb pastes the client's reply from Upwork (pre-hire proposal replies aren't

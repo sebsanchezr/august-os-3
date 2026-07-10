@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdmin } from '@/lib/supabase-server'
 
+export const dynamic = 'force-dynamic'
+
 // POST /api/comms/[id]/respond
 // One-tap: marks a comms_log entry as responded now.
 // Body: { responded_by?: uuid } (optional, for logging)

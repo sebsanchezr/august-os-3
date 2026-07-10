@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdmin } from '@/lib/supabase-server'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
   const supabase = createSupabaseAdmin()
   const { id } = params

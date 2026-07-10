@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdmin } from '@/lib/supabase-server'
 import { notifyTeamQuestion } from '@/lib/discord-notify'
 
+export const dynamic = 'force-dynamic'
+
 // GET /api/questions?status=open|answered|expired|all
 export async function GET(req: NextRequest) {
   const supabase = createSupabaseAdmin()
