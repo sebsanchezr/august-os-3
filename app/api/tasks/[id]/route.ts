@@ -4,7 +4,7 @@ import { notifyAssigned, notifySentToMediaBuyer } from '@/lib/discord-notify'
 
 export const dynamic = 'force-dynamic'
 
-const CREATIVE_STATUSES = ['brief', 'editing', 'revision', 'approved_by_client', 'sent_to_media_buyer', 'live'] as const
+const CREATIVE_STATUSES = ['brief', 'editing', 'revision', 'sent_for_approval', 'approved_by_client', 'sent_to_media_buyer', 'live'] as const
 const OPS_STATUSES = ['brief', 'in_progress', 'review', 'completed'] as const
 const PRIORITIES = ['urgent', 'high', 'normal', 'low'] as const
 
