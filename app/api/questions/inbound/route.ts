@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdmin } from '@/lib/supabase-server'
 import { notifyQuestionAnswered } from '@/lib/discord-notify'
 
+export const dynamic = 'force-dynamic'
+
 // POST /api/questions/inbound
 // Called by the Discord bot when a team member replies to a question thread.
 // Auth: X-Agent-Key header checked against AGENT_INBOUND_KEY env var.

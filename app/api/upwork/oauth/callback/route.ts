@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+export const dynamic = 'force-dynamic'
+
 const TOKEN_URL = 'https://www.upwork.com/api/v3/oauth2/token'
 
 // GET /api/upwork/oauth/callback

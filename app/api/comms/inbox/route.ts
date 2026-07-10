@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdmin } from '@/lib/supabase-server'
 
+export const dynamic = 'force-dynamic'
+
 // GET /api/comms/inbox
 // All open response clocks across all clients, ordered by due soonest.
 // Also returns team_questions (open, ordered by asked_at ASC).

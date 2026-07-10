@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdmin } from '@/lib/supabase-server'
 
+export const dynamic = 'force-dynamic'
+
 // GET /api/accounts/[id]/timeline
 // Merges reports, meetings, issues, and comms log into a single chronological feed.
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {

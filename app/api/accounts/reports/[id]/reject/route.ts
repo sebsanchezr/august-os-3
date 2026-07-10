@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdmin } from '@/lib/supabase-server'
 
+export const dynamic = 'force-dynamic'
+
 // POST /api/accounts/reports/[id]/reject
 // Body: { rejection_note: string }
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {

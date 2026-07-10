@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdmin } from '@/lib/supabase-server'
 import { notifyMinutesApproved } from '@/lib/discord-notify'
 
+export const dynamic = 'force-dynamic'
+
 // POST /api/meetings/[id]/send-minutes
 // Emails the approved minutes to attendees via Resend, sets minutes_sent_at,
 // logs an outbound client_comms_log row.

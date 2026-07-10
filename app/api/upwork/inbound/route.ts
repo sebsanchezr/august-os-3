@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdmin } from '@/lib/supabase-server'
 
+export const dynamic = 'force-dynamic'
+
 // POST /api/upwork/inbound
 // Called by the Discord bot when Seb reacts/replies to an opportunity post.
 // Auth: X-Agent-Key header checked against AGENT_INBOUND_KEY env var.

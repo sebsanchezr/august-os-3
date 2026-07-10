@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdmin } from '@/lib/supabase-server'
 import { notifyIssueRaised } from '@/lib/discord-notify'
 
+export const dynamic = 'force-dynamic'
+
 const VALID_CATEGORIES = [
   'financial_reporting', 'performance', 'execution_quality', 'communication',
   'process', 'client_side', 'value_for_money', 'personality_clash',

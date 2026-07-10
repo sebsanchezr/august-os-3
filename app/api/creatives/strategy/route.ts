@@ -3,6 +3,8 @@ import { createSupabaseAdmin } from '@/lib/supabase-server'
 import { isMissingTableError, weekStartOf, MIGRATION_MISSING_MESSAGE } from '@/lib/creatives'
 import { draftCreativeStrategy } from '@/lib/creatives-server'
 
+export const dynamic = 'force-dynamic'
+
 // POST /api/creatives/strategy: draft this week's creative strategy for a client.
 // Body: { client_id, focus, notes? }
 // Gathers client context, last 14 days of metrics, and recent knowledge_base

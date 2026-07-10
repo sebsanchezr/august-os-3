@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdmin } from '@/lib/supabase-server'
 
+export const dynamic = 'force-dynamic'
+
 // GET /api/upwork?status=surfaced|applied|replied|call_booked|won|passed|all
 export async function GET(req: NextRequest) {
   const supabase = createSupabaseAdmin()

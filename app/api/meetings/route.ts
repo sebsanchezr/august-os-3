@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdmin } from '@/lib/supabase-server'
 
+export const dynamic = 'force-dynamic'
+
 // GET /api/meetings
 // Cross-client meetings hub. Filters: status, from, to, client_id, type.
 // Default (no from/to, no status): scheduled meetings only, ordered by
