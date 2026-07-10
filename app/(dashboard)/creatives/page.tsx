@@ -118,6 +118,14 @@ export default function CreativesPage() {
   const [quickError, setQuickError] = useState<string | null>(null)
   const [quickDone, setQuickDone] = useState<string | null>(null)
 
+  // Generate Statics: grounded, DB-context nano banana generation (Feature 1).
+  const [showStatics, setShowStatics] = useState(false)
+  const [statics, setStatics] = useState({ client_id: '', brief: '', angle: '', count: 4 })
+  const [staticsBusy, setStaticsBusy] = useState(false)
+  const [staticsError, setStaticsError] = useState<string | null>(null)
+  const [staticsDone, setStaticsDone] = useState<string | null>(null)
+  const [staticsResults, setStaticsResults] = useState<{ index: number; image_url: string | null; error: string | null }[]>([])
+
   const [assets, setAssets] = useState<CreativeAssetWithClient[]>([])
   const [assetsLoading, setAssetsLoading] = useState(true)
   const [assetsError, setAssetsError] = useState<string | null>(null)
@@ -214,6 +222,43 @@ export default function CreativesPage() {
       setQuickError('Generation failed.')
     } finally {
       setQuickBusy(false)
+    }
+  }
+
+  async function runGenerateStatics() {
+    if (!statics.client_id) {
+      setStaticsError('Pick a client to generate statics for.')
+      return
+    }
+    setStaticsBusy(true)
+    setStaticsError(null)
+    setStaticsDone(null)
+    setStaticsResults([])
+    try {
+      const res = await fetch('/api/creatives/generate-statics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_id: statics.client_id,
+          brief: statics.brief,
+          angle: statics.angle,
+          count: statics.count,
+        }),
+      })
+      const d = await res.json()
+      if (!res.ok) {
+        // A no-AI-imagery rule refusal (422) comes back with a clear message.
+        setStaticsError(d.error ?? 'Generation failed.')
+        if (Array.isArray(d.results)) setStaticsResults(d.results)
+        return
+      }
+      setStaticsResults(Array.isArray(d.results) ? d.results : [])
+      setStaticsDone(`Generated ${d.generated} static${d.generated === 1 ? '' : 's'}${d.failed ? `, ${d.failed} failed` : ''}.`)
+      fetchOutputs()
+    } catch {
+      setStaticsError('Generation failed.')
+    } finally {
+      setStaticsBusy(false)
     }
   }
 
@@ -354,6 +399,99 @@ export default function CreativesPage() {
 
       {tab === 'strategies' && (
         <div>
+          {/* Generate Statics: grounded nano banana generation from client DB context. */}
+          <div className="rounded-xl border border-[#1c2035] bg-[#10121a] p-4 mb-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ImageIcon className="h-4 w-4 text-emerald-400" />
+                <p className="text-sm font-medium text-[#e4e6f0]">Generate Statics</p>
+                <span className="text-xs text-[#636780]">grounded in the client&apos;s brand notes and onboarding</span>
+              </div>
+              <button
+                onClick={() => setShowStatics((v) => !v)}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-500"
+              >
+                {showStatics ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+                {showStatics ? 'Close' : 'Generate Statics'}
+              </button>
+            </div>
+
+            {showStatics && (
+              <div className="mt-4 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3">
+                  <select
+                    value={statics.client_id}
+                    onChange={(e) => setStatics((s) => ({ ...s, client_id: e.target.value }))}
+                    className="bg-[#08090c] border border-[#1c2035] rounded-lg px-3 py-2 text-sm text-[#e4e6f0] focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  >
+                    <option value="">Select client...</option>
+                    {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                  <select
+                    value={statics.count}
+                    onChange={(e) => setStatics((s) => ({ ...s, count: Number(e.target.value) }))}
+                    className="bg-[#08090c] border border-[#1c2035] rounded-lg px-3 py-2 text-sm text-[#e4e6f0] focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  >
+                    {[1, 2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n} image{n === 1 ? '' : 's'}</option>)}
+                  </select>
+                </div>
+                <input
+                  value={statics.angle}
+                  onChange={(e) => setStatics((s) => ({ ...s, angle: e.target.value }))}
+                  placeholder="Angle, e.g. social proof, founder story, summer resort"
+                  className="w-full bg-[#08090c] border border-[#1c2035] rounded-lg px-3 py-2 text-sm text-[#e4e6f0] focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                />
+                <textarea
+                  value={statics.brief}
+                  onChange={(e) => setStatics((s) => ({ ...s, brief: e.target.value }))}
+                  placeholder="Optional brief, e.g. hero product on colour block, urgent sale tone, 4:5 for feed"
+                  rows={2}
+                  className="w-full bg-[#08090c] border border-[#1c2035] rounded-lg px-3 py-2 text-sm text-[#e4e6f0] focus:outline-none focus:ring-1 focus:ring-emerald-500 resize-none"
+                />
+                <button
+                  onClick={runGenerateStatics}
+                  disabled={staticsBusy}
+                  className="flex items-center justify-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-50"
+                >
+                  {staticsBusy ? <><Loader2 className="h-4 w-4 animate-spin" /> Generating...</> : <><ImageIcon className="h-4 w-4" /> Generate Statics</>}
+                </button>
+                {staticsError && <p className="text-xs text-red-400">{staticsError}</p>}
+                {staticsDone && <p className="text-xs text-emerald-400">{staticsDone}</p>}
+                {staticsResults.length > 0 && (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-1">
+                    {staticsResults.map((r) => (
+                      <div key={r.index} className="rounded-lg border border-[#1c2035] bg-[#08090c] overflow-hidden">
+                        {r.image_url ? (
+                          <a href={r.image_url} target="_blank" rel="noopener noreferrer" className="block aspect-square bg-[#0d0f16]">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={r.image_url} alt={`Static ${r.index + 1}`} className="w-full h-full object-cover" />
+                          </a>
+                        ) : (
+                          <div className="aspect-square flex items-center justify-center p-2 text-center">
+                            <span className="text-[10px] text-red-400">{r.error ?? 'Failed'}</span>
+                          </div>
+                        )}
+                        {r.image_url && (
+                          <div className="p-2">
+                            <a
+                              href={r.image_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              download
+                              className="flex items-center gap-1 text-[10px] text-[#636780] hover:text-emerald-400"
+                            >
+                              <ExternalLink className="h-3 w-3" /> Open / download
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Quick Generate: statics in minutes, no weekly strategy needed. */}
           <div className="rounded-xl border border-indigo-500/30 bg-gradient-to-b from-indigo-500/[0.07] to-transparent p-4 mb-5">
             <div className="flex items-center gap-2 mb-3">

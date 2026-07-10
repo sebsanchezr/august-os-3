@@ -47,24 +47,26 @@ type AdsDetailResponse = {
   empty: boolean
 }
 
-type Recommendation = {
-  markdown: string
-  generated_at: string
-  persisted?: boolean
-  persist_note?: string
-}
-
 type Severity = 'high' | 'medium' | 'low'
 
-type HygieneFinding = {
-  rule: string
+type HygieneCheck = {
+  key: string
   severity: Severity
-  level: string
-  entityId: string
-  entityName: string
-  message: string
-  evidence: string
+  title: string
+  detail: string
+  affected: Array<Record<string, unknown>>
 }
+
+type RecommendationRun = {
+  generated_at: string | null
+  data_as_of: string | null
+  checks: HygieneCheck[]
+  summary: string | null
+  meta_token_dead?: boolean
+}
+
+const SEVERITY_ORDER: Severity[] = ['high', 'medium', 'low']
+const SEVERITY_LABEL: Record<Severity, string> = { high: 'High', medium: 'Medium', low: 'Low' }
 
 function formatMoney(amount: number): string {
   return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 }).format(amount)
@@ -111,8 +113,7 @@ export default function AdsPage() {
   const [detail, setDetail] = useState<AdsDetailResponse | null>(null)
   const [loadingClients, setLoadingClients] = useState(true)
   const [loadingDetail, setLoadingDetail] = useState(false)
-  const [recommendation, setRecommendation] = useState<Recommendation | null>(null)
-  const [findings, setFindings] = useState<HygieneFinding[]>([])
+  const [run, setRun] = useState<RecommendationRun | null>(null)
   const [recLoading, setRecLoading] = useState(false)
   const [recError, setRecError] = useState<string | null>(null)
 
@@ -149,28 +150,24 @@ export default function AdsPage() {
     fetch(`/api/ads/recommendations?client_id=${clientId}`, { cache: 'no-store' })
       .then((res) => res.json())
       .then((json) => {
-        setFindings(Array.isArray(json.findings) ? json.findings : [])
-        if (json.recommendation) {
-          setRecommendation({
-            markdown: json.recommendation.draft_md,
-            generated_at: json.recommendation.created_at,
-            persisted: true,
+        if (json.generated_at || (Array.isArray(json.checks) && json.checks.length > 0)) {
+          setRun({
+            generated_at: json.generated_at ?? null,
+            data_as_of: json.data_as_of ?? null,
+            checks: Array.isArray(json.checks) ? json.checks : [],
+            summary: json.summary ?? null,
           })
         } else {
-          setRecommendation(null)
+          setRun(null)
         }
       })
-      .catch(() => {
-        setRecommendation(null)
-        setFindings([])
-      })
+      .catch(() => setRun(null))
   }, [])
 
   useEffect(() => {
     if (!selectedId) return
     setDetail(null)
-    setRecommendation(null)
-    setFindings([])
+    setRun(null)
     setRecError(null)
     loadDetail(selectedId)
     loadRecommendation(selectedId)
@@ -210,12 +207,12 @@ export default function AdsPage() {
         setRecError(json.error ?? 'Failed to generate recommendations')
         return
       }
-      setFindings(Array.isArray(json.findings) ? json.findings : [])
-      setRecommendation({
-        markdown: json.markdown,
-        generated_at: json.generated_at,
-        persisted: json.persisted,
-        persist_note: json.persist_note,
+      setRun({
+        generated_at: json.generated_at ?? null,
+        data_as_of: json.data_as_of ?? null,
+        checks: Array.isArray(json.checks) ? json.checks : [],
+        summary: json.summary ?? null,
+        meta_token_dead: json.meta_token_dead,
       })
     } catch (err) {
       setRecError(err instanceof Error ? err.message : 'Failed to generate recommendations')
@@ -340,48 +337,78 @@ export default function AdsPage() {
 
               {recError && <p className="text-xs text-red-400 mb-3">{recError}</p>}
 
-              {findings.length > 0 && (
-                <div className="mb-4">
-                  <h3 className="text-[10px] font-semibold uppercase tracking-wide text-[#636780] mb-2">
-                    Account hygiene checks ({findings.length})
-                  </h3>
-                  <div className="space-y-2">
-                    {findings.map((f) => (
-                      <div
-                        key={`${f.rule}-${f.entityId}`}
-                        className="flex items-start gap-3 bg-[#181b27] border border-[#1c2035] rounded-lg p-3"
-                      >
-                        <span
-                          className={`shrink-0 mt-0.5 px-1.5 py-0.5 rounded border text-[9px] font-semibold uppercase tracking-wide ${SEVERITY_BADGE[f.severity]}`}
-                        >
-                          {f.severity}
-                        </span>
-                        <div className="min-w-0">
-                          <p className="text-xs text-[#e4e6f0]">
-                            <span className="text-[#636780] uppercase text-[9px] mr-1.5">{f.level}</span>
-                            {f.entityName}
-                          </p>
-                          <p className="text-xs text-[#8b8fa8] mt-0.5">{f.message}</p>
-                          <p className="text-[10px] text-[#636780] mt-0.5 tabular-nums">{f.evidence}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              <p className="text-[10px] text-amber-400 mb-3">
+                {run?.data_as_of
+                  ? `Data as of ${formatDate(run.data_as_of)}. `
+                  : 'No metrics data on file. '}
+                Meta access token is dead, so numbers may be stale. Nothing here is fabricated.
+              </p>
 
-              {recommendation ? (
+              {run ? (
                 <>
-                  <p className="text-[10px] text-[#636780] mb-2">
-                    Generated {new Date(recommendation.generated_at).toLocaleString('en-GB')}
-                    {recommendation.persisted === false && ' (not saved, shown for this session only)'}
-                  </p>
-                  {recommendation.persist_note && (
-                    <p className="text-[10px] text-amber-400 mb-2">{recommendation.persist_note}</p>
+                  {run.summary && (
+                    <div className="bg-[#181b27] rounded-lg p-3 mb-4 text-xs text-[#8b8fa8] whitespace-pre-wrap leading-relaxed">
+                      {run.summary}
+                    </div>
                   )}
-                  <div className="bg-[#181b27] rounded-lg p-3 text-xs text-[#8b8fa8] whitespace-pre-wrap font-mono leading-relaxed">
-                    {recommendation.markdown}
-                  </div>
+
+                  {run.checks.length === 0 ? (
+                    <p className="text-xs text-[#636780]">No hygiene issues detected in the available data.</p>
+                  ) : (
+                    <div className="space-y-4">
+                      {SEVERITY_ORDER.map((sev) => {
+                        const group = run.checks.filter((c) => c.severity === sev)
+                        if (group.length === 0) return null
+                        return (
+                          <div key={sev}>
+                            <h3 className="text-[10px] font-semibold uppercase tracking-wide text-[#636780] mb-2">
+                              {SEVERITY_LABEL[sev]} ({group.length})
+                            </h3>
+                            <div className="space-y-2">
+                              {group.map((c) => (
+                                <div key={c.key} className="bg-[#181b27] border border-[#1c2035] rounded-lg p-3">
+                                  <div className="flex items-start gap-3">
+                                    <span
+                                      className={`shrink-0 mt-0.5 px-1.5 py-0.5 rounded border text-[9px] font-semibold uppercase tracking-wide ${SEVERITY_BADGE[c.severity]}`}
+                                    >
+                                      {c.severity}
+                                    </span>
+                                    <div className="min-w-0">
+                                      <p className="text-xs text-[#e4e6f0] font-medium">{c.title}</p>
+                                      <p className="text-xs text-[#8b8fa8] mt-0.5">{c.detail}</p>
+                                      {c.affected.length > 0 && (
+                                        <ul className="mt-2 space-y-1">
+                                          {c.affected.map((a, idx) => {
+                                            const name = (a.client_name as string) ?? (a.entity as string) ?? ''
+                                            const rest = Object.entries(a)
+                                              .filter(([k]) => !['client_id', 'client_name', 'entity'].includes(k))
+                                              .map(([k, v]) => `${k.replace(/_/g, ' ')}: ${String(v)}`)
+                                              .join(' · ')
+                                            return (
+                                              <li key={idx} className="text-[10px] text-[#636780] tabular-nums">
+                                                <span className="text-[#8b8fa8]">{name}</span>
+                                                {rest && <span> {'· '}{rest}</span>}
+                                              </li>
+                                            )
+                                          })}
+                                        </ul>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  {run.generated_at && (
+                    <p className="text-[10px] text-[#636780] mt-3">
+                      Last run {new Date(run.generated_at).toLocaleString('en-GB')}
+                    </p>
+                  )}
                 </>
               ) : (
                 <p className="text-xs text-[#636780]">No recommendations generated yet for this client.</p>

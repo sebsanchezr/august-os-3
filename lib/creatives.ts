@@ -98,6 +98,28 @@ export type CreativeOutput = {
   created_at: string
 }
 
+// One "Generate Statics" batch (migration 037). results holds the per-image
+// public URLs (or per-image error) once the nano banana run finishes.
+export type CreativeGenerationResult = {
+  index: number
+  image_url: string | null
+  storage_path: string | null
+  error: string | null
+}
+
+export type CreativeGeneration = {
+  id: string
+  client_id: string | null
+  requested_by: string | null
+  brief: string | null
+  angle: string | null
+  count: number
+  status: 'pending' | 'generating' | 'done' | 'failed'
+  error: string | null
+  results: CreativeGenerationResult[]
+  created_at: string
+}
+
 // A single concept the image engine renders: parsed from a strategy or expanded
 // from a freeform brief. hook is short in-image copy (keep under ~25 chars for
 // legibility); aspect_ratio is '1:1' (feed) or '4:5' (portrait feed).
