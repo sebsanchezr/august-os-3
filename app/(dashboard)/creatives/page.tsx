@@ -135,6 +135,20 @@ export default function CreativesPage() {
   const [newAssetError, setNewAssetError] = useState<string | null>(null)
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
 
+  // Research grounding availability per client (TrendTrack ads + Shopify products).
+  const [research, setResearch] = useState<Record<string, { trendtrack: number; shopify: number; hasAny: boolean }>>({})
+
+  const fetchResearch = useCallback(async (clientId: string) => {
+    if (!clientId || research[clientId]) return
+    try {
+      const res = await fetch(`/api/creatives?scope=research&client_id=${clientId}`)
+      if (res.ok) {
+        const d = await res.json()
+        if (d.research) setResearch(prev => ({ ...prev, [clientId]: d.research }))
+      }
+    } catch { /* non-blocking; grounding line just stays hidden */ }
+  }, [research])
+
   const fetchClients = useCallback(async () => {
     const res = await fetch('/api/creatives?scope=clients')
     if (res.ok) {
@@ -187,6 +201,21 @@ export default function CreativesPage() {
     fetchAssets()
     fetchOutputs()
   }, [fetchClients, fetchStrategies, fetchAssets, fetchOutputs])
+
+  // Probe research grounding whenever a client is picked in either generator.
+  useEffect(() => { if (quick.client_id) fetchResearch(quick.client_id) }, [quick.client_id, fetchResearch])
+  useEffect(() => { if (statics.client_id) fetchResearch(statics.client_id) }, [statics.client_id, fetchResearch])
+
+  // Subtle one-liner describing what grounds this client's generated concepts.
+  function researchLine(clientId: string) {
+    if (!clientId) return null
+    const r = research[clientId]
+    if (!r) return <p className="text-[11px] text-[#636780] mt-1">Checking research grounding...</p>
+    const text = r.hasAny
+      ? `Research grounding: TrendTrack (${r.trendtrack} ad${r.trendtrack === 1 ? '' : 's'}), Shopify (${r.shopify} product${r.shopify === 1 ? '' : 's'})`
+      : 'Research grounding: profile only'
+    return <p className="text-[11px] text-[#636780] mt-1">{text}</p>
+  }
 
   async function copyUrl(url: string) {
     try {
@@ -435,6 +464,7 @@ export default function CreativesPage() {
                     {[1, 2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n} image{n === 1 ? '' : 's'}</option>)}
                   </select>
                 </div>
+                {researchLine(statics.client_id)}
                 <input
                   value={statics.angle}
                   onChange={(e) => setStatics((s) => ({ ...s, angle: e.target.value }))}
@@ -518,6 +548,7 @@ export default function CreativesPage() {
                     {[1, 2, 3, 4].map(n => <option key={n} value={n}>{n} image{n === 1 ? '' : 's'}</option>)}
                   </select>
                 </div>
+                {researchLine(quick.client_id)}
                 <textarea
                   value={quick.brief}
                   onChange={(e) => setQuick(q => ({ ...q, brief: e.target.value }))}

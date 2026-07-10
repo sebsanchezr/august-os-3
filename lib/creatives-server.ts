@@ -35,8 +35,23 @@ function coerceConcept(o: Record<string, unknown>, i: number): GenConcept {
   }
 }
 
+// Optional research grounding block (TrendTrack winning ads + Shopify best
+// sellers), rendered into the prompt only when present. Null changes nothing.
+function researchBlock(researchContext: string | null | undefined): string {
+  if (!researchContext) return ''
+  return `
+
+Use this live research to sharpen the concepts. Draw inspiration from the winning-ad hooks and formats, and when Shopify best sellers are listed prefer their REAL product names and prices over invented ones:
+${researchContext}
+`
+}
+
 // Parse an approved strategy markdown doc into exactly 3 image-ready concepts.
-export async function parseStrategyConcepts(strategyMd: string, clientName: string): Promise<GenConcept[]> {
+export async function parseStrategyConcepts(
+  strategyMd: string,
+  clientName: string,
+  researchContext?: string | null,
+): Promise<GenConcept[]> {
   const res = await client.messages.create({
     model: SONNET,
     max_tokens: 1200,
@@ -52,7 +67,7 @@ From the strategy below for ${clientName}, extract EXACTLY 3 concepts. For each 
 
 Strategy:
 ${strategyMd}
-
+${researchBlock(researchContext)}
 Respond with ONLY a JSON array of 3 objects. No preamble, no markdown fences.`,
     }],
   })
@@ -62,7 +77,12 @@ Respond with ONLY a JSON array of 3 objects. No preamble, no markdown fences.`,
 }
 
 // Expand a freeform brief into N image-ready concepts for Quick Generate.
-export async function expandBriefConcepts(brief: string, clientName: string, quantity: number): Promise<GenConcept[]> {
+export async function expandBriefConcepts(
+  brief: string,
+  clientName: string,
+  quantity: number,
+  researchContext?: string | null,
+): Promise<GenConcept[]> {
   const n = Math.max(1, Math.min(4, quantity))
   const res = await client.messages.create({
     model: SONNET,
@@ -73,7 +93,7 @@ export async function expandBriefConcepts(brief: string, clientName: string, qua
 
 Client: ${clientName}
 Brief: ${brief}
-
+${researchBlock(researchContext)}
 Produce EXACTLY ${n} distinct static ad concept(s). For each return:
 - "title": short concept name
 - "hook": in-image copy, MAX 25 characters, punchy. Empty string if none needed.

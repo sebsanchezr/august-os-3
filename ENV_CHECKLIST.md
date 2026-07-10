@@ -63,6 +63,23 @@ if (cronSecret) {
 - The check only runs **if `CRON_SECRET` is set**. If it is not set in the environment, the route accepts any request with no auth at all.
 - Vercel's own Cron Jobs feature automatically sends this header using the project's `CRON_SECRET` env var when the cron is configured through `vercel.json` (this repo has a `vercel.json` with cron schedules) - so as long as `CRON_SECRET` is set in Vercel Production, Vercel-triggered runs authenticate automatically. Manually curling a cron endpoint requires setting the same header by hand.
 
+## Research grounding for creative generation (`lib/research-server.ts`)
+
+Concept generation (`app/api/creatives/generate`) is optionally enriched with two external research sources. Both are fully optional and env-gated: if the vars are missing the fetchers return `null` and generation is unchanged (no error). Results are cached in-memory for 24h per client so repeated generations do not re-hit paid APIs.
+
+| Variable | Feature it gates | Set in `.env.local`? | What silently breaks without it |
+|---|---|---|---|
+| `TRENDTRACK_API_KEY` | TrendTrack winning-ad intelligence for a client's tracked niches/brands (`fetchTrendTrackResearch`). Only fires when the client's `clients.trendtrak_ids` array is non-empty. | Yes (copied from AM Agency workspace `.env`) | `fetchTrendTrackResearch` returns `null`; concepts are grounded on profile data only. No winning-ad hooks/formats injected. |
+| `SHOPIFY_ACCESS_TOKEN_<KEY>` | Per-client Shopify Admin token for best-seller lookup (`fetchShopifyResearch`). Read-only (`products.json`). | Partial - `LILLYS` key present but token is a placeholder in the workspace `.env` (`# shpat_... - fill in when available`) | Fetcher returns `null` for that client; real product names/prices are not injected into concept prompts. |
+| `SHOPIFY_DOMAIN_<KEY>` | Store domain for the same lookup. Accepts `store`, `store.myshopify.com`, or a full URL. | Yes for `LILLYS` (`lillys-amsterdam.myshopify.com`) | Same as above - no Shopify grounding for that client. |
+
+**Per-client env key convention (`<KEY>`):** derived from the client's name by taking the FIRST word, uppercasing it, and stripping non-alphanumerics (`shopifyEnvKey()` in `lib/research-server.ts`). Both `SHOPIFY_ACCESS_TOKEN_<KEY>` and `SHOPIFY_DOMAIN_<KEY>` must be set for a client's store to be queried. Examples:
+
+- `Lillys Amsterdam` -> `LILLYS` -> `SHOPIFY_ACCESS_TOKEN_LILLYS` / `SHOPIFY_DOMAIN_LILLYS`
+- `L'alingi` -> `LALINGI` -> `SHOPIFY_ACCESS_TOKEN_LALINGI` / `SHOPIFY_DOMAIN_LALINGI`
+
+**TrendTrack credit + sort gotchas (mirrored from `execution/scrape_trendtrack.py`):** `/v1/ads` charges 1 credit PER RETURNED ROW, so `fetchTrendTrackResearch` caps total returned rows at ~10 across tracked terms and serves from a 24h cache. `sortBy` must be one of `relevance | newest | longestRunning | reach`; `daysRunning` is INVALID and 400s. We use `longestRunning` to surface proven winners.
+
 ## Notes
 
 - Variables not read anywhere in `app/`, `lib/`, `middleware.ts`, or `scripts/` (e.g. any not listed above) were not included even if present in `.env.example` or `.env.local` - this table is grep-derived from actual code usage, not from the example file.

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdmin } from '@/lib/supabase-server'
 import { ASSET_KINDS, isMissingTableError, weekStartOf, MIGRATION_MISSING_MESSAGE } from '@/lib/creatives'
 import type { AssetKind } from '@/lib/creatives'
+import { fetchTrendTrackResearch, fetchShopifyResearch } from '@/lib/research-server'
 
 export const dynamic = 'force-dynamic'
 
@@ -48,6 +49,36 @@ export async function GET(req: NextRequest) {
     const items = (clients ?? []).map(c => ({ client: c, strategy: byClient.get(c.id) ?? null }))
 
     return NextResponse.json({ weekStart, items })
+  }
+
+  // Lightweight research-availability probe for the generation UI. Returns how
+  // many winning ads / store products ground this client's concepts, or zero
+  // when only the profile is available. Served from the 24h research cache so it
+  // does not burn TrendTrack credits on every page interaction.
+  if (scope === 'research') {
+    const clientId = req.nextUrl.searchParams.get('client_id')
+    if (!clientId) return NextResponse.json({ error: 'client_id is required' }, { status: 400 })
+
+    const { data: c, error } = await supabase
+      .from('clients')
+      .select('id, name, trendtrak_ids')
+      .eq('id', clientId)
+      .maybeSingle()
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (!c) return NextResponse.json({ error: 'Client not found' }, { status: 404 })
+
+    const researchClient = { id: c.id, name: c.name, trendtrak_ids: c.trendtrak_ids ?? null }
+    const [tt, shop] = await Promise.all([
+      fetchTrendTrackResearch(researchClient),
+      fetchShopifyResearch(researchClient),
+    ])
+    return NextResponse.json({
+      research: {
+        trendtrack: tt?.adCount ?? 0,
+        shopify: shop?.productCount ?? 0,
+        hasAny: !!(tt || shop),
+      },
+    })
   }
 
   if (scope === 'outputs') {
