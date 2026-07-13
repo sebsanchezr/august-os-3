@@ -13,7 +13,9 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   const supabase = createSupabaseAdmin()
   const { data, error } = await supabase
     .from('onboardings')
-    .select('*, pipeline_deals(id, prospect_name), clients(id, name), onboarding_forms(*)')
+    // Explicit FK path (onboardings.client_id -> clients.id) to avoid the
+    // ambiguity with clients.onboarding_id that fails the query (PGRST201).
+    .select('*, pipeline_deals(id, prospect_name), clients!onboardings_client_id_fkey(id, name), onboarding_forms(*)')
     .eq('id', params.id)
     .single()
 

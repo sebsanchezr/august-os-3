@@ -3,7 +3,7 @@
 import { MessageSquare, Repeat, Video } from 'lucide-react'
 import type { Task } from '@/lib/types'
 import { PRIORITY_COLOURS } from '@/lib/types'
-import { initials, avatarColour, formatDue, DUE_TONE_CLASS } from '@/lib/task-format'
+import { initials, avatarColour, formatDue, dueColorClass } from '@/lib/task-format'
 
 type Props = {
   task: Task
@@ -80,7 +80,7 @@ export default function TaskCard({ task, onClick, onDragStart, dragging }: Props
         </div>
 
         {due && (
-          <span className={`text-[10px] font-medium tabular-nums ${DUE_TONE_CLASS[due.tone]}`}>
+          <span className={`text-[10px] font-medium tabular-nums ${dueColorClass(task)}`}>
             {due.label}
           </span>
         )}

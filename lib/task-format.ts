@@ -100,6 +100,18 @@ export const DUE_TONE_CLASS: Record<DueInfo['tone'], string> = {
   normal: 'text-[#636780]',
 }
 
+// Due-date colour for a task, accounting for status. A terminal status means
+// the deliverable shipped (creative 'live', ops 'completed'), so an overdue due
+// date reads green instead of red. Everything else follows DUE_TONE_CLASS.
+export function dueColorClass(task: { due_date: string | null; status: TaskStatus }): string {
+  const due = formatDue(task.due_date)
+  if (!due) return ''
+  if (due.tone === 'overdue' && (task.status === 'live' || task.status === 'completed')) {
+    return 'text-green-400'
+  }
+  return DUE_TONE_CLASS[due.tone]
+}
+
 export function formatTimestamp(ts: string): string {
   return new Date(ts).toLocaleString('en-GB', {
     day: 'numeric',

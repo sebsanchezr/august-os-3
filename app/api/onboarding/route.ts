@@ -12,7 +12,10 @@ export async function GET(req: NextRequest) {
 
     let query = supabase
       .from('onboardings')
-      .select('*, pipeline_deals(id, prospect_name), clients(id, name)')
+      // clients is embedded via the explicit FK: onboardings.client_id -> clients.id.
+      // Disambiguates from the reverse clients.onboarding_id relationship, which
+      // otherwise makes PostgREST reject the whole query (PGRST201).
+      .select('*, pipeline_deals(id, prospect_name), clients!onboardings_client_id_fkey(id, name)')
       .order('created_at', { ascending: false })
 
     if (status) query = query.eq('status', status)
