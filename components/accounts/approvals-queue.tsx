@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { Loader2, CheckCircle, XCircle, Edit3, ChevronDown, ChevronUp } from 'lucide-react'
-import { fetchPendingReports, approveReport, rejectReport } from '@/lib/accounts-client'
-import type { ClientReport, Client } from '@/lib/types'
+import { fetchPendingReports, approveReport, rejectReport, fetchPendingMeetingTasks, approvePendingMeetingTask, rejectPendingMeetingTask } from '@/lib/accounts-client'
+import type { ClientReport, Client, PendingMeetingTask } from '@/lib/types'
 
 type ReportWithClient = ClientReport & { clients: Pick<Client, 'id' | 'name' | 'health'> }
 
@@ -29,6 +29,11 @@ export default function ApprovalsQueue() {
   const [rejecting, setRejecting] = useState<Record<string, boolean>>({})
   const [busy, setBusy] = useState<Record<string, boolean>>({})
 
+  const [pendingTasks, setPendingTasks] = useState<PendingMeetingTask[]>([])
+  const [tasksLoading, setTasksLoading] = useState(true)
+  const [tasksError, setTasksError] = useState<string | null>(null)
+  const [taskBusy, setTaskBusy] = useState<Record<string, boolean>>({})
+
   const load = useCallback(() => {
     fetchPendingReports()
       .then(setReports)
@@ -36,7 +41,39 @@ export default function ApprovalsQueue() {
       .finally(() => setLoading(false))
   }, [])
 
+  const loadTasks = useCallback(() => {
+    fetchPendingMeetingTasks()
+      .then(setPendingTasks)
+      .catch((e: Error) => setTasksError(e.message))
+      .finally(() => setTasksLoading(false))
+  }, [])
+
   useEffect(() => { load() }, [load])
+  useEffect(() => { loadTasks() }, [loadTasks])
+
+  async function handleApproveTask(task: PendingMeetingTask) {
+    setTaskBusy((b) => ({ ...b, [task.id]: true }))
+    try {
+      await approvePendingMeetingTask(task.id)
+      setPendingTasks((ts) => ts.filter((t) => t.id !== task.id))
+    } catch (e: unknown) {
+      alert((e as Error).message)
+    } finally {
+      setTaskBusy((b) => ({ ...b, [task.id]: false }))
+    }
+  }
+
+  async function handleRejectTask(task: PendingMeetingTask) {
+    setTaskBusy((b) => ({ ...b, [task.id]: true }))
+    try {
+      await rejectPendingMeetingTask(task.id)
+      setPendingTasks((ts) => ts.filter((t) => t.id !== task.id))
+    } catch (e: unknown) {
+      alert((e as Error).message)
+    } finally {
+      setTaskBusy((b) => ({ ...b, [task.id]: false }))
+    }
+  }
 
   async function handleApprove(report: ReportWithClient) {
     setBusy((b) => ({ ...b, [report.id]: true }))
@@ -77,6 +114,78 @@ export default function ApprovalsQueue() {
         <p className="text-[#636780] text-xs mt-0.5">
           {reports.length} report{reports.length !== 1 ? 's' : ''} pending. Edit the client message inline then approve.
         </p>
+      </div>
+
+      {/* Meeting tasks pending approval */}
+      <div className="mb-8">
+        <div className="mb-3">
+          <h2 className="text-[#e4e6f0] font-semibold text-sm">Meeting tasks pending approval</h2>
+          <p className="text-[#636780] text-xs mt-0.5">
+            Action items the meeting agent extracted from a transcript or notes email. Nothing lands in Tasks until you approve it here.
+          </p>
+        </div>
+
+        {tasksError && <p className="text-red-400 text-sm mb-3">{tasksError}</p>}
+
+        {tasksLoading ? (
+          <div className="flex items-center justify-center h-16">
+            <Loader2 className="animate-spin text-[#636780]" size={16} />
+          </div>
+        ) : pendingTasks.length === 0 ? (
+          <div className="text-center text-[#636780] text-sm py-8 rounded-xl border border-[#1c2035] bg-[#0e1017]">
+            No meeting tasks waiting on you.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {pendingTasks.map((task) => {
+              const isBusy = taskBusy[task.id] ?? false
+              return (
+                <div key={task.id} className="rounded-xl border border-[#1c2035] bg-[#0e1017] p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[#e4e6f0] font-medium text-sm">{task.title}</p>
+                      <p className="text-[#636780] text-xs mt-1">
+                        {task.meeting_title ?? 'Meeting'}
+                        {task.suggested_client_name && <span> &middot; {task.suggested_client_name}</span>}
+                        {task.suggested_assignee_role && (
+                          <span> &middot; {task.suggested_assignee_role.replace('_', ' ')}</span>
+                        )}
+                        {task.suggested_department && (
+                          <span> &middot; {task.suggested_department.replace('_', ' ')}</span>
+                        )}
+                        {task.due_hint && <span> &middot; due {task.due_hint}</span>}
+                      </p>
+                      {task.quote && (
+                        <div className="bg-[#181b27] rounded-lg p-2.5 mt-2 text-xs text-[#8b8fa8] italic">
+                          &ldquo;{task.quote}&rdquo;
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 mt-3">
+                    <button
+                      disabled={isBusy}
+                      onClick={() => handleApproveTask(task)}
+                      className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs bg-emerald-700 hover:bg-emerald-600 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {isBusy ? <Loader2 size={11} className="animate-spin" /> : <CheckCircle size={11} />}
+                      Approve
+                    </button>
+                    <button
+                      disabled={isBusy}
+                      onClick={() => handleRejectTask(task)}
+                      className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs bg-[#181b27] hover:bg-[#1c2035] text-[#636780] hover:text-red-400 border border-[#1c2035] transition-colors disabled:opacity-40"
+                    >
+                      {isBusy ? <Loader2 size={11} className="animate-spin" /> : <XCircle size={11} />}
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {error && <p className="text-red-400 text-sm mb-4">{error}</p>}

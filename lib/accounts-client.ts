@@ -1,7 +1,7 @@
 // Client-side fetch helpers for the Accounts module.
 // Mirrors the pattern in lib/tasks-client.ts.
 
-import type { Client, ClientReport, ClientIssue, ClientCommsLog, ClientMeeting, TeamQuestion, OnboardingForm, ClientCreativeAsset, Task, Profile } from './types'
+import type { Client, ClientReport, ClientIssue, ClientCommsLog, ClientMeeting, TeamQuestion, OnboardingForm, ClientCreativeAsset, Task, Profile, PendingMeetingTask } from './types'
 
 const BASE = '/api/accounts'
 
@@ -127,6 +127,33 @@ export async function rejectReport(reportId: string, rejectionNote?: string): Pr
   }
   const json = await res.json()
   return json.report
+}
+
+// ─── Pending meeting tasks (real approval gate, see 041 migration) ───────────
+
+export async function fetchPendingMeetingTasks(): Promise<PendingMeetingTask[]> {
+  const res = await fetch('/api/pending-tasks', { cache: 'no-store' })
+  if (!res.ok) throw new Error('Failed to load pending meeting tasks')
+  const json = await res.json()
+  return json.pending_tasks
+}
+
+export async function approvePendingMeetingTask(id: string): Promise<Task> {
+  const res = await fetch(`/api/pending-tasks/${id}/approve`, { method: 'POST' })
+  if (!res.ok) {
+    const { error } = await res.json().catch(() => ({ error: 'Unknown error' }))
+    throw new Error(error)
+  }
+  const json = await res.json()
+  return json.task
+}
+
+export async function rejectPendingMeetingTask(id: string): Promise<void> {
+  const res = await fetch(`/api/pending-tasks/${id}/reject`, { method: 'POST' })
+  if (!res.ok) {
+    const { error } = await res.json().catch(() => ({ error: 'Unknown error' }))
+    throw new Error(error)
+  }
 }
 
 // ─── Comms ────────────────────────────────────────────────────────────────────

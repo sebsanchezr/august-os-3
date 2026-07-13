@@ -117,6 +117,25 @@ export type ClientMeeting = {
   followup_report?: Pick<ClientReport, 'id' | 'status'> | null
 }
 
+export type PendingMeetingTaskStatus = 'pending' | 'approved' | 'rejected'
+
+export type PendingMeetingTask = {
+  id: string
+  meeting_id: string | null
+  meeting_title: string | null
+  source_file_id: string | null
+  title: string
+  description: string
+  suggested_assignee_role: string | null
+  suggested_department: string | null
+  suggested_client_name: string | null
+  due_hint: string | null
+  quote: string | null
+  status: PendingMeetingTaskStatus
+  created_at: string
+  reviewed_at: string | null
+}
+
 export type ClientCommDirection = 'inbound' | 'outbound'
 export type ClientCommChannel = 'whatsapp' | 'email' | 'call' | 'meeting'
 export type ClientCommSentiment = 'positive' | 'neutral' | 'concern'
