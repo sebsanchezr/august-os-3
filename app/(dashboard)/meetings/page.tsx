@@ -22,10 +22,18 @@ const CLIENT_DOT_COLORS = [
   'bg-sky-400', 'bg-purple-400', 'bg-orange-400', 'bg-teal-400',
 ]
 
-function colorForClient(id: string): string {
+function colorForClient(id: string | null): string {
+  // Internal team meetings have no client: a stable neutral dot.
+  if (!id) return 'bg-[#636780]'
   let hash = 0
   for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0
   return CLIENT_DOT_COLORS[hash % CLIENT_DOT_COLORS.length]
+}
+
+// Title shown on a card: the meeting's own title (e.g. "Team priorities call")
+// takes priority, then the client name, then a safe fallback.
+function meetingLabel(m: MeetingWithClient): string {
+  return m.title ?? m.clients?.name ?? 'Meeting'
 }
 
 function startOfDay(d: Date): Date {
@@ -109,7 +117,7 @@ function MeetingCard({ meeting, onOpen }: { meeting: MeetingWithClient; onOpen: 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <p className={`text-sm font-medium truncate ${isCancelled ? 'line-through text-[#636780]' : 'text-[#e4e6f0]'}`}>
-            {meeting.clients?.name ?? 'Unknown client'}
+            {meetingLabel(meeting)}
           </p>
           <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${TYPE_BADGE[meeting.type] ?? TYPE_BADGE.adhoc}`}>
             {meeting.type}

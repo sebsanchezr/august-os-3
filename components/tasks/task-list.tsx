@@ -75,15 +75,17 @@ export default function TaskList() {
     return track === 'creative' ? CREATIVE_COLUMNS : OPS_COLUMNS
   }
 
-  // Overdue colour rule, creative track only: 'live' means the deliverable
-  // shipped (green, complete) even though the due date has passed. Any other
-  // non-terminal creative status (brief, editing, revision, sent_for_approval,
-  // approved_by_client, sent_to_media_buyer) that is overdue means work is still stuck (red).
+  // Overdue colour rule. A terminal status means the deliverable shipped, so it
+  // reads green even when the due date has passed: 'live' on the creative track,
+  // 'completed' on the ops track. Any other non-terminal creative status
+  // (brief, editing, revision, sent_for_approval, approved_by_client,
+  // sent_to_media_buyer) that is overdue means work is still stuck (red).
   function overdueTone(task: Task): 'done' | 'stuck' | null {
     const due = formatDue(task.due_date)
     if (!due || due.tone !== 'overdue') return null
+    if (task.status === 'live' || task.status === 'completed') return 'done'
     if (task.track !== 'creative') return null
-    return task.status === 'live' ? 'done' : 'stuck'
+    return 'stuck'
   }
 
   function SortHeader({ label, k, className = '' }: { label: string; k: SortKey; className?: string }) {

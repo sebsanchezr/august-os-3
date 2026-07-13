@@ -52,6 +52,9 @@ export default function MeetingSlideOver({ meeting, onClose, onUpdated }: Props)
     meeting.followup_report?.status === 'approved'
 
   async function handleSaveMinutes() {
+    // Internal team meetings have no client, so there is no per-client meeting
+    // update endpoint to hit. Guard rather than post to /accounts/null/...
+    if (!meeting.client_id) return
     setSavingMinutes(true)
     try {
       const updated = await updateMeeting(meeting.client_id, meeting.id, { minutes_md: minutesText })
@@ -107,7 +110,7 @@ export default function MeetingSlideOver({ meeting, onClose, onUpdated }: Props)
               </span>
               <StatusDot status={meeting.status} />
             </div>
-            <h2 className="text-[#e4e6f0] font-semibold text-base">{meeting.clients.name}</h2>
+            <h2 className="text-[#e4e6f0] font-semibold text-base">{meeting.clients?.name ?? meeting.title ?? 'Meeting'}</h2>
             <p className="text-[11px] text-[#636780] mt-0.5">{dateStr}</p>
             {meeting.status === 'cancelled' && meeting.cancellation_reason && (
               <p className="text-[11px] text-[#636780] mt-1">Cancelled: {meeting.cancellation_reason}</p>

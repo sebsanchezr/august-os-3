@@ -294,7 +294,8 @@ export async function updateMeeting(
 // ─── Meetings hub (cross-client) ──────────────────────────────────────────────
 
 export type MeetingWithClient = ClientMeeting & {
-  clients: Pick<Client, 'id' | 'name' | 'health' | 'am_profile_id'>
+  // null for internal team meetings with no client (migration 038)
+  clients: Pick<Client, 'id' | 'name' | 'health' | 'am_profile_id'> | null
   prep_report: { id: string; status: string } | null
   followup_report: { id: string; status: string } | null
 }

@@ -51,7 +51,7 @@ export default function TaskArchive() {
       <div className="mb-1">
         <h1 className="text-lg font-semibold text-[#e4e6f0]">Archive</h1>
         <p className="text-[12px] text-[#636780] mt-0.5">
-          Completed tasks auto-archive after 14 days. Nothing is ever permanently deleted, everything here can be restored.
+          Completed tasks auto-archive after 7 days. Nothing is ever permanently deleted, everything here can be restored.
         </p>
       </div>
 

@@ -31,9 +31,13 @@ export async function logUpdate(
 
 export async function fetchLatestUpdates(limit = 20): Promise<OsUpdate[]> {
   const supabase = createSupabaseAdmin()
+  // The Updates page is the UI/UX changelog only. The daily activity digest
+  // (tag 'Digest') still lands in os_updates for other uses but is excluded
+  // here so this page shows only shipped product changes.
   const { data, error } = await supabase
     .from('os_updates')
     .select('*')
+    .or('tag.is.null,tag.neq.Digest')
     .order('created_at', { ascending: false })
     .limit(limit)
 

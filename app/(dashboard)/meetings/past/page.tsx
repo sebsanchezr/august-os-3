@@ -66,7 +66,7 @@ export default function PastMeetingsPage() {
                   <p className="text-xs text-[#636780]">{dateStr}</p>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-[#e4e6f0] font-medium truncate group-hover:text-white">{m.clients.name}</p>
+                  <p className="text-sm text-[#e4e6f0] font-medium truncate group-hover:text-white">{m.title ?? m.clients?.name ?? 'Meeting'}</p>
                 </div>
                 <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${TYPE_BADGE[m.type] ?? TYPE_BADGE.adhoc}`}>
                   {m.type}

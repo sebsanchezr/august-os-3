@@ -89,7 +89,10 @@ export type ClientMeetingStatus = 'scheduled' | 'done' | 'cancelled'
 
 export type ClientMeeting = {
   id: string
-  client_id: string
+  // null for internal team meetings that map to no client (migration 038)
+  client_id: string | null
+  // optional display name, e.g. "Team priorities call" (migration 038)
+  title: string | null
   type: ClientMeetingType
   scheduled_at: string
   agenda: string | null
