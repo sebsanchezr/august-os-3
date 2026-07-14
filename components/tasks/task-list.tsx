@@ -81,9 +81,11 @@ export default function TaskList() {
   // (brief, editing, revision, sent_for_approval, approved_by_client,
   // sent_to_media_buyer) that is overdue means work is still stuck (red).
   function overdueTone(task: Task): 'done' | 'stuck' | null {
+    // Terminal status means the deliverable shipped: always green, regardless
+    // of due date (a task completed early or with no due date still reads done).
+    if (task.status === 'live' || task.status === 'completed') return 'done'
     const due = formatDue(task.due_date)
     if (!due || due.tone !== 'overdue') return null
-    if (task.status === 'live' || task.status === 'completed') return 'done'
     if (task.track !== 'creative') return null
     return 'stuck'
   }
