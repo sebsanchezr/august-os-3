@@ -104,7 +104,7 @@ export default function TaskBoard() {
   const total = filtered.length
 
   return (
-    <div className="flex flex-col h-full p-5">
+    <div className="flex flex-col min-h-full p-5">
       {/* Header: title + track tabs */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-4">

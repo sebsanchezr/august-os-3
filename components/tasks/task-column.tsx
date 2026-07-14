@@ -48,7 +48,7 @@ export default function TaskColumn({
           setIsOver(false)
           onDropToColumn(status)
         }}
-        className={`flex-1 p-2 space-y-2 min-h-[120px] transition-colors rounded-b-xl
+        className={`flex-1 p-2 space-y-2 min-h-[120px] max-h-[calc(100vh-220px)] overflow-y-auto transition-colors rounded-b-xl
           ${isOver ? 'bg-indigo-500/5 ring-1 ring-inset ring-indigo-500/30' : ''}`}
       >
         {tasks.length === 0 && !isOver && (

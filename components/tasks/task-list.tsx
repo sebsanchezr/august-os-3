@@ -100,7 +100,7 @@ export default function TaskList() {
   }
 
   return (
-    <div className="flex flex-col h-full p-5">
+    <div className="flex flex-col min-h-full p-5">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-4">
           <h1 className="text-lg font-semibold text-[#e4e6f0]">Tasks List</h1>
