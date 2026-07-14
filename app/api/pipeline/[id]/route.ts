@@ -57,7 +57,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     }
 
     const allowedFields = [
-      'prospect_name', 'company', 'source_channel', 'stage', 'mrr_value', 'setup_value',
+      'prospect_name', 'company', 'contact_email', 'source_channel', 'stage', 'mrr_value', 'setup_value',
       'probability', 'currency', 'expected_close', 'owner_profile_id', 'next_action',
       'next_action_due', 'notes',
     ] as const

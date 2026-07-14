@@ -438,6 +438,7 @@ export type PipelineDeal = {
   id: string
   prospect_name: string
   company: string | null
+  contact_email: string | null
   source_channel: SourceChannel
   stage: PipelineStage
   mrr_value: number

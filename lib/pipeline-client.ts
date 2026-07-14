@@ -38,6 +38,22 @@ export async function updatePipelineDeal(id: string, patch: Partial<PipelineDeal
   return json.deal
 }
 
+export type FollowUpResult = {
+  draft: { subject: string; body: string }
+  usedEmailHistory: boolean
+}
+
+export async function draftPipelineFollowUp(id: string, context: string): Promise<FollowUpResult> {
+  const res = await fetch(`${PIPELINE_BASE}/${id}/follow-up`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ context }),
+  })
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(json.error ?? 'Failed to draft follow-up')
+  return json
+}
+
 export async function deletePipelineDeal(id: string): Promise<void> {
   const res = await fetch(`${PIPELINE_BASE}/${id}`, { method: 'DELETE' })
   if (!res.ok) throw new Error('Failed to delete pipeline deal')

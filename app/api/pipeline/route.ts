@@ -54,6 +54,7 @@ export async function POST(req: NextRequest) {
       .insert({
         prospect_name,
         company: body.company ?? null,
+        contact_email: body.contact_email ?? null,
         source_channel,
         stage: stage ?? 'new',
         mrr_value: body.mrr_value ?? 0,

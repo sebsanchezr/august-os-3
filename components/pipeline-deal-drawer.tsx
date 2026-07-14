@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X } from 'lucide-react'
-import { updatePipelineDeal, createPipelineDeal, deletePipelineDeal } from '@/lib/pipeline-client'
+import { X, Send, Sparkles, Copy, Check } from 'lucide-react'
+import { updatePipelineDeal, createPipelineDeal, deletePipelineDeal, draftPipelineFollowUp } from '@/lib/pipeline-client'
 import { SOURCE_CHANNELS } from '@/lib/pipeline-constants'
 import type { PipelineDeal, PipelineStage, SourceChannel } from '@/lib/types'
 
@@ -30,6 +30,7 @@ const CHANNEL_OPTIONS = SOURCE_CHANNELS
 type FormState = {
   prospect_name: string
   company: string
+  contact_email: string
   source_channel: SourceChannel
   stage: PipelineStage
   mrr_value: string
@@ -46,6 +47,7 @@ function toForm(deal: PipelineDeal): FormState {
   return {
     prospect_name: deal.prospect_name ?? '',
     company: deal.company ?? '',
+    contact_email: deal.contact_email ?? '',
     source_channel: deal.source_channel,
     stage: deal.stage,
     mrr_value: deal.mrr_value != null ? String(deal.mrr_value) : '',
@@ -63,6 +65,7 @@ function emptyForm(): FormState {
   return {
     prospect_name: '',
     company: '',
+    contact_email: '',
     source_channel: 'cold_call',
     stage: 'new',
     mrr_value: '',
@@ -86,6 +89,23 @@ export default function PipelineDealDrawer({ deal, creating, onClose, onSaved, o
   const [deleting, setDeleting] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Follow-up drafting state
+  const [followUpOpen, setFollowUpOpen] = useState(false)
+  const [followUpContext, setFollowUpContext] = useState('')
+  const [drafting, setDrafting] = useState(false)
+  const [followUpError, setFollowUpError] = useState<string | null>(null)
+  const [draftResult, setDraftResult] = useState<{ subject: string; body: string; usedEmailHistory: boolean } | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    // Reset follow-up UI whenever the drawer switches to a different deal.
+    setFollowUpOpen(false)
+    setFollowUpContext('')
+    setDraftResult(null)
+    setFollowUpError(null)
+    setCopied(false)
+  }, [deal?.id])
 
   useEffect(() => {
     if (deal) {
@@ -114,6 +134,7 @@ export default function PipelineDealDrawer({ deal, creating, onClose, onSaved, o
         const patch: Partial<PipelineDeal> = {
           prospect_name: form.prospect_name.trim(),
           company: form.company.trim() || null,
+          contact_email: form.contact_email.trim() || null,
           source_channel: form.source_channel,
           stage: form.stage,
           mrr_value: form.mrr_value === '' ? 0 : Number(form.mrr_value),
@@ -131,6 +152,7 @@ export default function PipelineDealDrawer({ deal, creating, onClose, onSaved, o
         const created = await createPipelineDeal({
           prospect_name: form.prospect_name.trim(),
           company: form.company.trim() || undefined,
+          contact_email: form.contact_email.trim() || undefined,
           source_channel: form.source_channel,
           stage: form.stage,
           mrr_value: form.mrr_value === '' ? 0 : Number(form.mrr_value),
@@ -172,6 +194,31 @@ export default function PipelineDealDrawer({ deal, creating, onClose, onSaved, o
     }
   }
 
+  async function handleDraftFollowUp() {
+    if (!deal) return
+    setDrafting(true)
+    setFollowUpError(null)
+    setDraftResult(null)
+    try {
+      const { draft, usedEmailHistory } = await draftPipelineFollowUp(deal.id, followUpContext.trim())
+      setDraftResult({ ...draft, usedEmailHistory })
+    } catch (err) {
+      setFollowUpError(err instanceof Error ? err.message : 'Failed to draft follow-up')
+    } finally {
+      setDrafting(false)
+    }
+  }
+
+  async function handleCopyDraft() {
+    if (!draftResult) return
+    const text = `Subject: ${draftResult.subject}\n\n${draftResult.body}`
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch { /* clipboard blocked, no-op */ }
+  }
+
   return (
     <>
       {/* Backdrop */}
@@ -202,6 +249,91 @@ export default function PipelineDealDrawer({ deal, creating, onClose, onSaved, o
 
         {/* Form */}
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+          {/* Send follow-up (existing deals only) */}
+          {deal && (
+            <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/[0.04] p-4 space-y-3">
+              {!followUpOpen ? (
+                <button
+                  onClick={() => setFollowUpOpen(true)}
+                  className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  Send Follow-up
+                </button>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-[#e4e6f0] flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                      AI Follow-up
+                    </p>
+                    <button
+                      onClick={() => { setFollowUpOpen(false); setDraftResult(null); setFollowUpError(null) }}
+                      className="text-[#636780] hover:text-[#e4e6f0] transition-colors"
+                      aria-label="Close follow-up"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  {!form.contact_email.trim() ? (
+                    <p className="text-xs text-amber-400">
+                      Add a contact email above and save before drafting a follow-up.
+                    </p>
+                  ) : (
+                    <>
+                      <p className="text-[11px] text-[#636780] leading-relaxed">
+                        Reads your last email thread with {form.contact_email.trim()}, then drafts a follow-up and
+                        posts it to Discord to copy and send. Add any new context below.
+                      </p>
+                      <textarea
+                        value={followUpContext}
+                        onChange={(e) => setFollowUpContext(e.target.value)}
+                        rows={3}
+                        placeholder="e.g. They asked for pricing on the 3-video package. Mention the case study from last week."
+                        className={`${inputClass} resize-none`}
+                      />
+                      <button
+                        onClick={handleDraftFollowUp}
+                        disabled={drafting}
+                        className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50"
+                      >
+                        {drafting ? 'Drafting...' : (
+                          <>
+                            <Sparkles className="w-3.5 h-3.5" />
+                            Generate Follow-up
+                          </>
+                        )}
+                      </button>
+
+                      {followUpError && <p className="text-xs text-red-400">{followUpError}</p>}
+
+                      {draftResult && (
+                        <div className="rounded-lg border border-[#1c2035] bg-[#181b27] p-3 space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-[10px] uppercase tracking-wider text-[#636780]">
+                              {draftResult.usedEmailHistory ? 'Drafted from your email thread' : 'Drafted from notes'}
+                            </p>
+                            <button
+                              onClick={handleCopyDraft}
+                              className="flex items-center gap-1 text-[10px] text-indigo-400 hover:text-indigo-300 transition-colors"
+                            >
+                              {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                              {copied ? 'Copied' : 'Copy'}
+                            </button>
+                          </div>
+                          <p className="text-xs font-medium text-[#e4e6f0]">{draftResult.subject}</p>
+                          <p className="text-xs text-[#a9adc8] whitespace-pre-wrap leading-relaxed">{draftResult.body}</p>
+                          <p className="text-[10px] text-[#3d4060] pt-1">Also sent to your Discord.</p>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Name */}
           <div className="space-y-1.5">
             <label className={labelClass}>Prospect Name <span className="text-red-400">*</span></label>
@@ -223,6 +355,18 @@ export default function PipelineDealDrawer({ deal, creating, onClose, onSaved, o
               onChange={(e) => set('company', e.target.value)}
               className={inputClass}
               placeholder="Company name"
+            />
+          </div>
+
+          {/* Contact email */}
+          <div className="space-y-1.5">
+            <label className={labelClass}>Contact Email</label>
+            <input
+              type="email"
+              value={form.contact_email}
+              onChange={(e) => set('contact_email', e.target.value)}
+              className={inputClass}
+              placeholder="name@company.com"
             />
           </div>
 

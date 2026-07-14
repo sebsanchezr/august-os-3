@@ -437,6 +437,33 @@ export function notifyDealLost(deal: NotifyDeal, reason: string): void {
   void post(PIPELINE_WEBHOOK_URL, `Deal lost: ${deal.prospect_name}.`, [embed])
 }
 
+// Follow-up draft: fired from the pipeline deal drawer's "Send follow-up" action.
+// Posts a ready-to-send email draft (subject + body) so Seb can copy it straight
+// from Discord and send to the prospect. Never sends anything itself.
+export function notifyPipelineFollowUp(
+  deal: { id: string; prospect_name: string; company?: string | null; contact_email?: string | null },
+  draft: { subject: string; body: string },
+  usedEmailHistory: boolean,
+): void {
+  const target = deal.company ? `${deal.prospect_name} (${deal.company})` : deal.prospect_name
+  const embed: Embed = {
+    title: `Follow-up ready: ${target}`,
+    url: `${OS_URL}/pipeline`,
+    color: 0x6366F1,
+    description: usedEmailHistory
+      ? 'Drafted from your last email thread with this contact. Copy and send.'
+      : 'No prior email thread found, drafted from deal notes and your context. Copy and send.',
+    fields: [
+      ...(deal.contact_email ? [{ name: 'To', value: deal.contact_email, inline: true }] : []),
+      { name: 'Subject', value: fmtField(draft.subject, 256) },
+      { name: 'Body (copy/paste)', value: fmtField(draft.body) },
+    ],
+    footer: { text: 'August OS Pipeline' },
+    timestamp: new Date().toISOString(),
+  }
+  void post(PIPELINE_WEBHOOK_URL, `Follow-up draft ready for ${target}.`, [embed])
+}
+
 export function notifyDealRotting(deal: NotifyDeal): void {
   const embed: Embed = {
     title: `Stalled: ${deal.prospect_name}`,
