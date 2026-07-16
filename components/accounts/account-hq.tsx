@@ -53,7 +53,7 @@ type AccountData = {
   }>
 }
 
-type TabId = 'overview' | 'history' | 'assets' | 'report' | 'meetings' | 'reports' | 'settings'
+type TabId = 'overview' | 'assets' | 'report' | 'meetings' | 'timeline' | 'reports' | 'settings'
 
 export default function AccountHQ({ accountId }: { accountId: string }) {
   const [data, setData] = useState<AccountData | null>(null)
@@ -157,10 +157,10 @@ export default function AccountHQ({ accountId }: { accountId: string }) {
       <div className="flex items-center gap-1 border-b border-[#1c2035] mb-5">
         {([
           ['overview', 'Overview'],
-          ['history', 'History'],
           ['assets', 'Assets'],
           ['report', 'Weekly Report'],
           ['meetings', 'Past Meetings'],
+          ['timeline', 'Timeline'],
           ['reports', 'Reports'],
           ['settings', 'Settings'],
         ] as [TabId, string][]).map(([t, label]) => (
@@ -311,8 +311,8 @@ export default function AccountHQ({ accountId }: { accountId: string }) {
         </div>
       )}
 
-      {/* History tab: full client timeline + daily relay updates */}
-      {tab === 'history' && (
+      {/* Timeline tab: full client feed (reports, meetings, issues, comms) + daily relay updates */}
+      {tab === 'timeline' && (
         <HistoryTimeline clientId={accountId} />
       )}
 
