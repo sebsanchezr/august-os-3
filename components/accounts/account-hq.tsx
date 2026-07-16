@@ -10,6 +10,7 @@ import ReportView from './report-view'
 import ReportHistory from './report-history'
 import PastMeetings from './past-meetings'
 import AssetsTab from './assets-tab'
+import HistoryTimeline from './history-timeline'
 import type { Client, ClientIssue, ClientReport, ClientMeeting, ClientMetricsDaily } from '@/lib/types'
 
 const HEALTH_COLOUR: Record<string, string> = {
@@ -52,7 +53,7 @@ type AccountData = {
   }>
 }
 
-type TabId = 'overview' | 'assets' | 'report' | 'meetings' | 'reports' | 'settings'
+type TabId = 'overview' | 'history' | 'assets' | 'report' | 'meetings' | 'reports' | 'settings'
 
 export default function AccountHQ({ accountId }: { accountId: string }) {
   const [data, setData] = useState<AccountData | null>(null)
@@ -156,10 +157,11 @@ export default function AccountHQ({ accountId }: { accountId: string }) {
       <div className="flex items-center gap-1 border-b border-[#1c2035] mb-5">
         {([
           ['overview', 'Overview'],
+          ['history', 'History'],
           ['assets', 'Assets'],
           ['report', 'Weekly Report'],
           ['meetings', 'Past Meetings'],
-          ['reports', 'History'],
+          ['reports', 'Reports'],
           ['settings', 'Settings'],
         ] as [TabId, string][]).map(([t, label]) => (
           <button
@@ -307,6 +309,11 @@ export default function AccountHQ({ accountId }: { accountId: string }) {
             <ActionButton icon={<Calendar size={12} />} label="Schedule meeting" onClick={() => setModal('meeting')} />
           </div>
         </div>
+      )}
+
+      {/* History tab: full client timeline + daily relay updates */}
+      {tab === 'history' && (
+        <HistoryTimeline clientId={accountId} />
       )}
 
       {/* Assets tab */}

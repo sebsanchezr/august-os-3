@@ -7,7 +7,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   const supabase = createSupabaseAdmin()
   const { id } = params
 
-  const [reportsRes, meetingsRes, issuesRes, commsRes] = await Promise.all([
+  const [reportsRes, meetingsRes, issuesRes, commsRes, historyRes] = await Promise.all([
     supabase
       .from('client_reports')
       .select('id, type, period_start, period_end, status, created_at, approved_at, sent_at')
@@ -35,11 +35,18 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       .eq('client_id', id)
       .order('occurred_at', { ascending: false })
       .limit(50),
+
+    supabase
+      .from('client_history')
+      .select('id, category, title, detail, created_by, occurred_at')
+      .eq('client_id', id)
+      .order('occurred_at', { ascending: false })
+      .limit(100),
   ])
 
   type TimelineEntry = {
     id: string
-    kind: 'report' | 'meeting' | 'issue' | 'comm'
+    kind: 'report' | 'meeting' | 'issue' | 'comm' | 'history'
     occurred_at: string
     data: Record<string, unknown>
   }
@@ -68,6 +75,12 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       kind: 'comm' as const,
       occurred_at: c.occurred_at,
       data: c,
+    })),
+    ...(historyRes.data ?? []).map((h) => ({
+      id: h.id,
+      kind: 'history' as const,
+      occurred_at: h.occurred_at,
+      data: h,
     })),
   ]
 
