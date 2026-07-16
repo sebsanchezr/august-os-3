@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { Loader2, Plus, X, Clock } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Loader2, Plus, X, Clock, Pin, Circle } from 'lucide-react'
 
 type TimelineKind = 'report' | 'meeting' | 'issue' | 'comm' | 'history'
 
@@ -31,6 +31,18 @@ const CATEGORY_LABELS: Record<HistoryCategory, string> = {
   issue:         'Issue',
   note:          'Note',
 }
+
+// Filter chips: each maps to a predicate over the entry.
+const FILTERS: { key: string; label: string; match: (e: TimelineEntry) => boolean }[] = [
+  { key: 'all',        label: 'All',        match: () => true },
+  { key: 'update',     label: 'Updates',    match: (e) => e.kind === 'history' && ((e.data.category as string) === 'update' || (e.data.category as string) === 'note') },
+  { key: 'milestone',  label: 'Milestones', match: (e) => e.kind === 'history' && (e.data.category as string) === 'milestone' },
+  { key: 'payment',    label: 'Payments',   match: (e) => e.kind === 'history' && (e.data.category as string) === 'payment' },
+  { key: 'issue',      label: 'Issues',     match: (e) => e.kind === 'issue' || (e.kind === 'history' && ((e.data.category as string) === 'issue' || (e.data.category as string) === 'status_change')) },
+  { key: 'meeting',    label: 'Meetings',   match: (e) => e.kind === 'meeting' },
+  { key: 'report',     label: 'Reports',    match: (e) => e.kind === 'report' },
+  { key: 'comm',       label: 'Comms',      match: (e) => e.kind === 'comm' },
+]
 
 // Chip colour per kind, with history sub-categories overriding by category.
 function chipClass(entry: TimelineEntry): string {
@@ -118,12 +130,38 @@ function dayKey(iso: string): string {
   return new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Europe/London' })
 }
 
-export default function HistoryTimeline({ clientId }: { clientId: string }) {
+const HEALTH_COLOUR: Record<string, string> = {
+  red: 'text-red-400', amber: 'text-amber-400', green: 'text-emerald-400',
+}
+
+const STATUS_BADGE: Record<string, string> = {
+  active:  'bg-emerald-900/50 text-emerald-300',
+  paused:  'bg-amber-900/50 text-amber-300',
+  churned: 'bg-red-900/50 text-red-300',
+}
+
+function daysSince(iso: string | null): number | null {
+  if (!iso) return null
+  const ms = Date.now() - new Date(iso).getTime()
+  if (ms < 0) return 0
+  return Math.floor(ms / 86400000)
+}
+
+export default function HistoryTimeline({
+  clientId, status, health, lastContact,
+}: {
+  clientId: string
+  status: string
+  health: string
+  lastContact: string | null
+}) {
   const [timeline, setTimeline] = useState<TimelineEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [showForm, setShowForm] = useState(false)
+  const [filter, setFilter] = useState('all')
+  const [pinning, setPinning] = useState<string | null>(null)
 
   function reload() {
     setLoading(true)
@@ -148,6 +186,23 @@ export default function HistoryTimeline({ clientId }: { clientId: string }) {
     })
   }
 
+  async function togglePin(entry: TimelineEntry) {
+    if (entry.kind !== 'history') return
+    setPinning(entry.id)
+    try {
+      const res = await fetch(`/api/accounts/${clientId}/history`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entry_id: entry.id, pinned: !entry.data.pinned }),
+      })
+      if (res.ok) reload()
+    } finally {
+      setPinning(null)
+    }
+  }
+
+  const filterFn = useMemo(() => FILTERS.find((f) => f.key === filter)?.match ?? (() => true), [filter])
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -160,9 +215,13 @@ export default function HistoryTimeline({ clientId }: { clientId: string }) {
     return <p className="text-red-400 text-xs py-8">{error}</p>
   }
 
-  // Group entries by day (already sorted newest first by the API)
+  const visible = timeline.filter(filterFn)
+  const pinned = visible.filter((e) => e.kind === 'history' && e.data.pinned === true)
+  const unpinned = visible.filter((e) => !(e.kind === 'history' && e.data.pinned === true))
+
+  // Group unpinned entries by day (already sorted newest first by the API)
   const groups: { key: string; label: string; entries: TimelineEntry[] }[] = []
-  for (const entry of timeline) {
+  for (const entry of unpinned) {
     const key = dayKey(entry.occurred_at)
     const last = groups[groups.length - 1]
     if (last && last.key === key) {
@@ -172,8 +231,75 @@ export default function HistoryTimeline({ clientId }: { clientId: string }) {
     }
   }
 
+  const sinceContact = daysSince(lastContact)
+
+  const renderEntry = (entry: TimelineEntry) => {
+    const detail = entryDetail(entry)
+    const isExpanded = expanded.has(entry.id)
+    const isHistory = entry.kind === 'history'
+    const isPinned = isHistory && entry.data.pinned === true
+    return (
+      <div
+        key={`${entry.kind}-${entry.id}`}
+        className={`group rounded-xl border px-4 py-3 ${isPinned ? 'border-indigo-900/60 bg-indigo-950/20' : 'border-[#1c2035] bg-[#0e1017]'}`}
+      >
+        <div className="flex items-start gap-3">
+          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 mt-0.5 ${chipClass(entry)}`}>
+            {chipLabel(entry)}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs text-[#e4e6f0] font-medium">{entryTitle(entry)}</p>
+            {detail && (
+              <p
+                onClick={() => toggleExpanded(entry.id)}
+                className={`text-[11px] text-[#636780] mt-1 cursor-pointer leading-relaxed ${
+                  isExpanded ? '' : 'line-clamp-3'
+                }`}
+              >
+                {detail}
+              </p>
+            )}
+            {isHistory && entry.data.created_by ? (
+              <p className="text-[9px] text-[#3d4060] mt-1">logged by {entry.data.created_by as string}</p>
+            ) : null}
+          </div>
+          <div className="flex items-center gap-2 shrink-0 ml-2">
+            {isHistory && (
+              <button
+                onClick={() => togglePin(entry)}
+                disabled={pinning === entry.id}
+                title={isPinned ? 'Unpin' : 'Pin to top'}
+                className={`transition-colors ${isPinned ? 'text-indigo-400' : 'text-[#3d4060] hover:text-[#636780] opacity-0 group-hover:opacity-100'}`}
+              >
+                <Pin size={12} className={isPinned ? 'fill-current' : ''} />
+              </button>
+            )}
+            <span className="text-[10px] text-[#3d4060]">{formatTime(entry.occurred_at)}</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-4">
+      {/* Relationship snapshot */}
+      <div className="flex items-center gap-4 rounded-xl border border-[#1c2035] bg-[#0e1017] px-4 py-3">
+        <div className="flex items-center gap-2">
+          <Circle size={10} className={`fill-current ${HEALTH_COLOUR[health] ?? HEALTH_COLOUR.green}`} />
+          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded capitalize ${STATUS_BADGE[status] ?? 'bg-[#1c2035] text-[#636780]'}`}>
+            {status}
+          </span>
+        </div>
+        <div className="h-4 w-px bg-[#1c2035]" />
+        <div className="flex items-center gap-1.5 text-[11px]">
+          <Clock size={12} className="text-[#636780]" />
+          <span className={sinceContact != null && sinceContact > 7 ? 'text-amber-400' : 'text-[#636780]'}>
+            {sinceContact == null ? 'No contact logged' : sinceContact === 0 ? 'Contacted today' : `${sinceContact}d since last contact`}
+          </span>
+        </div>
+      </div>
+
       <AddUpdateForm
         clientId={clientId}
         show={showForm}
@@ -181,51 +307,50 @@ export default function HistoryTimeline({ clientId }: { clientId: string }) {
         onAdded={() => { setShowForm(false); reload() }}
       />
 
-      {groups.length === 0 && (
+      {/* Filter chips */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {FILTERS.map((f) => (
+          <button
+            key={f.key}
+            onClick={() => setFilter(f.key)}
+            className={`text-[10px] px-2.5 py-1 rounded-full border transition-colors ${
+              filter === f.key
+                ? 'bg-indigo-600 text-white border-indigo-500'
+                : 'bg-[#181b27] text-[#636780] border-[#1c2035] hover:text-[#e4e6f0]'
+            }`}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      {visible.length === 0 && (
         <div className="text-center py-16 rounded-xl border border-dashed border-[#1c2035]">
           <Clock size={20} className="mx-auto text-[#3d4060] mb-2" />
-          <p className="text-[#636780] text-sm">No history yet.</p>
+          <p className="text-[#636780] text-sm">Nothing here yet.</p>
         </div>
       )}
 
+      {/* Pinned */}
+      {pinned.length > 0 && (
+        <div>
+          <p className="flex items-center gap-1.5 text-[9px] font-bold tracking-widest uppercase text-indigo-400 mb-2">
+            <Pin size={10} className="fill-current" /> Pinned
+          </p>
+          <div className="space-y-2">
+            {pinned.map(renderEntry)}
+          </div>
+        </div>
+      )}
+
+      {/* Chronological feed */}
       {groups.map((group) => (
         <div key={group.key}>
           <p className="text-[9px] font-bold tracking-widest uppercase text-[#636780] mb-2">
             {group.label}
           </p>
           <div className="space-y-2">
-            {group.entries.map((entry) => {
-              const detail = entryDetail(entry)
-              const isExpanded = expanded.has(entry.id)
-              return (
-                <div
-                  key={`${entry.kind}-${entry.id}`}
-                  className="rounded-xl border border-[#1c2035] bg-[#0e1017] px-4 py-3"
-                >
-                  <div className="flex items-start gap-3">
-                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 mt-0.5 ${chipClass(entry)}`}>
-                      {chipLabel(entry)}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs text-[#e4e6f0] font-medium">{entryTitle(entry)}</p>
-                      {detail && (
-                        <p
-                          onClick={() => toggleExpanded(entry.id)}
-                          className={`text-[11px] text-[#636780] mt-1 cursor-pointer leading-relaxed ${
-                            isExpanded ? '' : 'line-clamp-3'
-                          }`}
-                        >
-                          {detail}
-                        </p>
-                      )}
-                    </div>
-                    <span className="text-[10px] text-[#3d4060] shrink-0 ml-2">
-                      {formatTime(entry.occurred_at)}
-                    </span>
-                  </div>
-                </div>
-              )
-            })}
+            {group.entries.map(renderEntry)}
           </div>
         </div>
       ))}

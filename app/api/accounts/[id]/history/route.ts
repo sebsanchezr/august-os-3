@@ -59,3 +59,28 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (error || !entry) return NextResponse.json({ error: error?.message ?? 'Insert failed' }, { status: 500 })
   return NextResponse.json({ entry }, { status: 201 })
 }
+
+// PATCH /api/accounts/[id]/history — toggle pin on a history entry.
+// Body: { entry_id: string, pinned: boolean }
+export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+  const supabase = createSupabaseAdmin()
+  const { id } = params
+
+  let body: Record<string, unknown>
+  try { body = await req.json() } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }) }
+
+  const entryId = typeof body.entry_id === 'string' ? body.entry_id : ''
+  if (!entryId) return NextResponse.json({ error: 'entry_id is required' }, { status: 400 })
+  if (typeof body.pinned !== 'boolean') return NextResponse.json({ error: 'pinned must be a boolean' }, { status: 400 })
+
+  const { data: entry, error } = await supabase
+    .from('client_history')
+    .update({ pinned: body.pinned })
+    .eq('id', entryId)
+    .eq('client_id', id)
+    .select()
+    .single()
+
+  if (error || !entry) return NextResponse.json({ error: error?.message ?? 'Update failed' }, { status: 500 })
+  return NextResponse.json({ entry })
+}

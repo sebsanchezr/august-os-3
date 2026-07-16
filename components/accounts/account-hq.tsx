@@ -313,7 +313,12 @@ export default function AccountHQ({ accountId }: { accountId: string }) {
 
       {/* Timeline tab: full client feed (reports, meetings, issues, comms) + daily relay updates */}
       {tab === 'timeline' && (
-        <HistoryTimeline clientId={accountId} />
+        <HistoryTimeline
+          clientId={accountId}
+          status={account.status}
+          health={account.health}
+          lastContact={account.last_client_contact ?? null}
+        />
       )}
 
       {/* Assets tab */}

@@ -6,6 +6,7 @@ import { createSupabaseAdmin } from '@/lib/supabase-server'
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   const supabase = createSupabaseAdmin()
   const { id } = params
+  const nowIso = new Date().toISOString()
 
   const [reportsRes, meetingsRes, issuesRes, commsRes, historyRes] = await Promise.all([
     supabase
@@ -15,10 +16,13 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       .order('created_at', { ascending: false })
       .limit(50),
 
+    // Only meetings that have already happened. The timeline is a record of
+    // what occurred, not a schedule of what is upcoming.
     supabase
       .from('client_meetings')
       .select('id, type, scheduled_at, status, agenda')
       .eq('client_id', id)
+      .lte('scheduled_at', nowIso)
       .order('scheduled_at', { ascending: false })
       .limit(50),
 
@@ -38,7 +42,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
     supabase
       .from('client_history')
-      .select('id, category, title, detail, created_by, occurred_at')
+      .select('id, category, title, detail, created_by, occurred_at, pinned')
       .eq('client_id', id)
       .order('occurred_at', { ascending: false })
       .limit(100),
