@@ -1,10 +1,10 @@
 'use client'
 
 import { useEffect, useMemo, useState, useCallback } from 'react'
-import { Loader2, ArrowUpDown } from 'lucide-react'
+import { Loader2, ArrowUpDown, X } from 'lucide-react'
 import type { Task, TaskStatus, TaskTrack, TaskPriority } from '@/lib/types'
 import { CREATIVE_COLUMNS, OPS_COLUMNS, PRIORITY_COLOURS } from '@/lib/types'
-import { useTaskMeta, useCurrentUserId, patchTask, updateStatus } from '@/lib/tasks-client'
+import { useTaskMeta, useCurrentUserId, patchTask, updateStatus, softDeleteTask } from '@/lib/tasks-client'
 import { STATUS_LABELS, DEPARTMENT_LABELS, formatDue, DUE_TONE_CLASS, initials, avatarColour } from '@/lib/task-format'
 import TaskDetail from './task-detail'
 
@@ -69,6 +69,12 @@ export default function TaskList() {
 
   async function inlineField(task: Task, body: Record<string, unknown>) {
     try { await patchTask(task.id, { ...body, actor_id: currentUserId }); await refetch() } catch { await refetch() }
+  }
+
+  async function deleteTask(task: Task) {
+    if (!window.confirm(`Delete this task?\n\n"${task.title}"\n\nThis removes it from the board and list.`)) return
+    setTasks((prev) => prev.filter((t) => t.id !== task.id))
+    try { await softDeleteTask(task.id, currentUserId); await refetch() } catch { await refetch() }
   }
 
   function statusOptions(track: TaskTrack) {
@@ -138,18 +144,19 @@ export default function TaskList() {
                 <SortHeader label="Client" k="client" />
                 <SortHeader label="Priority" k="priority" />
                 <SortHeader label="Due" k="due_date" />
+                <th className="w-8" />
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 && (
-                <tr><td colSpan={6} className="text-center text-[#3d4060] py-8">No tasks</td></tr>
+                <tr><td colSpan={7} className="text-center text-[#3d4060] py-8">No tasks</td></tr>
               )}
               {rows.map((task) => {
                 const due = formatDue(task.due_date)
                 const tone = overdueTone(task)
                 const rowToneClass = tone === 'done' ? 'bg-green-500/10' : tone === 'stuck' ? 'bg-red-500/10' : ''
                 return (
-                  <tr key={task.id} className={`border-b border-[#1c2035]/60 hover:bg-[#151824] transition-colors ${rowToneClass}`}>
+                  <tr key={task.id} className={`group border-b border-[#1c2035]/60 hover:bg-[#151824] transition-colors ${rowToneClass}`}>
                     {/* Title */}
                     <td className="px-2 py-1.5">
                       <button onClick={() => setOpenTaskId(task.id)} className="text-left text-[#e4e6f0] hover:text-indigo-400 transition-colors leading-snug">
@@ -210,6 +217,17 @@ export default function TaskList() {
                           tone === 'done' ? 'text-green-400' : tone === 'stuck' ? 'text-red-400' : due ? DUE_TONE_CLASS[due.tone] : ''
                         }`}
                       />
+                    </td>
+                    {/* Delete */}
+                    <td className="px-1 py-1.5 text-right">
+                      <button
+                        onClick={() => deleteTask(task)}
+                        title="Delete task"
+                        aria-label="Delete task"
+                        className="opacity-0 group-hover:opacity-100 focus:opacity-100 text-[#636780] hover:text-red-400 transition-opacity rounded p-1 hover:bg-red-500/10"
+                      >
+                        <X style={{ width: 13, height: 13 }} />
+                      </button>
                     </td>
                   </tr>
                 )

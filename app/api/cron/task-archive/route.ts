@@ -34,6 +34,25 @@ async function handle(req: NextRequest) {
   const now = new Date()
   const cutoff = new Date(now.getTime() - ARCHIVE_AFTER_DAYS * 24 * 60 * 60 * 1000)
 
+  // Backfill: tasks seeded/imported straight into the DB can sit in a terminal
+  // status ('completed'/'live') with a null completed_at. Without a completion
+  // timestamp the archive query below can never see them, so they linger on the
+  // board forever. Stamp completed_at from updated_at (a safe proxy for when the
+  // status last changed) so they enter the normal 7-day archive flow. Runs every
+  // day, so any future direct-DB completion is caught the next morning.
+  // (supabase-js has no column=column update, so backfill row by row.)
+  const { data: needsStamp } = await supabase
+    .from('tasks')
+    .select('id, updated_at')
+    .in('status', ['completed', 'live'])
+    .is('completed_at', null)
+    .is('archived_at', null)
+    .is('deleted_at', null)
+
+  for (const t of needsStamp ?? []) {
+    await supabase.from('tasks').update({ completed_at: t.updated_at }).eq('id', t.id)
+  }
+
   const { data, error } = await supabase
     .from('tasks')
     .update({ archived_at: now.toISOString(), updated_at: now.toISOString() })
