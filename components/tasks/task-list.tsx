@@ -1,11 +1,11 @@
 'use client'
 
 import { useEffect, useMemo, useState, useCallback } from 'react'
-import { Loader2, ArrowUpDown, X } from 'lucide-react'
-import type { Task, TaskStatus, TaskTrack, TaskPriority } from '@/lib/types'
+import { Loader2, ArrowUpDown, X, ListFilter } from 'lucide-react'
+import type { Task, TaskStatus, TaskTrack, TaskPriority, TaskDepartment } from '@/lib/types'
 import { CREATIVE_COLUMNS, OPS_COLUMNS, PRIORITY_COLOURS } from '@/lib/types'
 import { useTaskMeta, useCurrentUserId, patchTask, updateStatus, softDeleteTask } from '@/lib/tasks-client'
-import { STATUS_LABELS, DEPARTMENT_LABELS, formatDue, DUE_TONE_CLASS, initials, avatarColour } from '@/lib/task-format'
+import { STATUS_LABELS, DEPARTMENT_LABELS, PRIORITY_LABELS, formatDue, DUE_TONE_CLASS, initials, avatarColour } from '@/lib/task-format'
 import TaskDetail from './task-detail'
 
 type SortKey = 'title' | 'status' | 'assignee' | 'client' | 'priority' | 'due_date'
@@ -14,12 +14,19 @@ const PRIORITY_ORDER: Record<TaskPriority, number> = { urgent: 0, high: 1, norma
 const cellSelect =
   'bg-transparent hover:bg-[#181b27] border border-transparent hover:border-[#1c2035] rounded px-1.5 py-1 text-[12px] text-[#e4e6f0] focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:bg-[#181b27] [color-scheme:dark] cursor-pointer'
 
+const filterSelect =
+  'bg-[#10121a] border border-[#1c2035] hover:border-[#2a2f45] rounded-md px-2 py-1 text-[11px] text-[#e4e6f0] focus:outline-none focus:ring-1 focus:ring-indigo-500 [color-scheme:dark] cursor-pointer'
+
 export default function TaskList() {
   const { profiles, clients } = useTaskMeta()
   const currentUserId = useCurrentUserId()
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
   const [trackFilter, setTrackFilter] = useState<TaskTrack | 'all'>('all')
+  const [clientFilter, setClientFilter] = useState<string>('all')       // client id | 'none' | 'all'
+  const [assigneeFilter, setAssigneeFilter] = useState<string>('all')   // profile id | 'unassigned' | 'all'
+  const [priorityFilter, setPriorityFilter] = useState<TaskPriority | 'all'>('all')
+  const [deptFilter, setDeptFilter] = useState<TaskDepartment | 'all'>('all')
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
   const [sortKey, setSortKey] = useState<SortKey>('due_date')
   const [sortAsc, setSortAsc] = useState(true)
@@ -42,8 +49,26 @@ export default function TaskList() {
     else { setSortKey(key); setSortAsc(true) }
   }
 
+  const anyFilterActive =
+    clientFilter !== 'all' || assigneeFilter !== 'all' || priorityFilter !== 'all' || deptFilter !== 'all'
+
+  function clearFilters() {
+    setClientFilter('all'); setAssigneeFilter('all'); setPriorityFilter('all'); setDeptFilter('all')
+  }
+
   const rows = useMemo(() => {
-    const filtered = tasks.filter((t) => trackFilter === 'all' || t.track === trackFilter)
+    const filtered = tasks.filter((t) => {
+      if (trackFilter !== 'all' && t.track !== trackFilter) return false
+      if (clientFilter !== 'all') {
+        if (clientFilter === 'none' ? !!t.client_id : t.client_id !== clientFilter) return false
+      }
+      if (assigneeFilter !== 'all') {
+        if (assigneeFilter === 'unassigned' ? !!t.assignee_id : t.assignee_id !== assigneeFilter) return false
+      }
+      if (priorityFilter !== 'all' && t.priority !== priorityFilter) return false
+      if (deptFilter !== 'all' && t.department !== deptFilter) return false
+      return true
+    })
     const sorted = [...filtered].sort((a, b) => {
       let av: string | number = ''
       let bv: string | number = ''
@@ -60,7 +85,14 @@ export default function TaskList() {
       return 0
     })
     return sorted
-  }, [tasks, trackFilter, sortKey, sortAsc])
+  }, [tasks, trackFilter, clientFilter, assigneeFilter, priorityFilter, deptFilter, sortKey, sortAsc])
+
+  // Which departments actually appear in the current task set (skip empty facets).
+  const activeDepartments = useMemo(() => {
+    const set = new Set<TaskDepartment>()
+    tasks.forEach((t) => t.department && set.add(t.department))
+    return Array.from(set)
+  }, [tasks])
 
   async function inlineStatus(task: Task, status: TaskStatus) {
     setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status } : t)))
@@ -127,6 +159,47 @@ export default function TaskList() {
           </div>
         </div>
         <span className="text-[11px] text-[#636780] tabular-nums">{rows.length} tasks</span>
+      </div>
+
+      {/* Filter bar */}
+      <div className="flex items-center flex-wrap gap-2 mb-4">
+        <div className="flex items-center gap-1.5 text-[#636780] mr-1">
+          <ListFilter style={{ width: 13, height: 13 }} />
+          <span className="text-[11px] font-medium">Filter</span>
+        </div>
+
+        <select value={clientFilter} onChange={(e) => setClientFilter(e.target.value)} className={filterSelect} aria-label="Filter by client">
+          <option value="all">All clients</option>
+          <option value="none">No client</option>
+          {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+
+        <select value={assigneeFilter} onChange={(e) => setAssigneeFilter(e.target.value)} className={filterSelect} aria-label="Filter by assignee">
+          <option value="all">All assignees</option>
+          <option value="unassigned">Unassigned</option>
+          {profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+
+        <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value as TaskPriority | 'all')} className={filterSelect} aria-label="Filter by priority">
+          <option value="all">All priorities</option>
+          <option value="urgent">Urgent</option>
+          <option value="high">High</option>
+          <option value="normal">Normal</option>
+          <option value="low">Low</option>
+        </select>
+
+        {activeDepartments.length > 0 && (
+          <select value={deptFilter} onChange={(e) => setDeptFilter(e.target.value as TaskDepartment | 'all')} className={filterSelect} aria-label="Filter by department">
+            <option value="all">All departments</option>
+            {activeDepartments.map((d) => <option key={d} value={d}>{DEPARTMENT_LABELS[d]}</option>)}
+          </select>
+        )}
+
+        {anyFilterActive && (
+          <button onClick={clearFilters} className="flex items-center gap-1 text-[11px] text-[#636780] hover:text-red-400 transition-colors rounded-md px-2 py-1 hover:bg-red-500/10">
+            <X style={{ width: 11, height: 11 }} /> Clear
+          </button>
+        )}
       </div>
 
       {loading ? (
