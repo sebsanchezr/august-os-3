@@ -15,8 +15,6 @@ interface PipelineDealDrawerProps {
 }
 
 const STAGE_OPTIONS: { value: PipelineStage; label: string }[] = [
-  { value: 'new',            label: 'New' },
-  { value: 'contacted',      label: 'Contacted' },
   { value: 'positive_reply', label: 'Positive Reply' },
   { value: 'booked',         label: 'Booked' },
   { value: 'showed',         label: 'Showed' },
@@ -68,7 +66,7 @@ function emptyForm(): FormState {
     company: '',
     contact_email: '',
     source_channel: 'cold_call',
-    stage: 'new',
+    stage: 'booked',
     mrr_value: '',
     setup_value: '',
     probability: '',

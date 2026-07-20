@@ -13,8 +13,6 @@ import { ONBOARDING_STATUS_LABELS } from '@/lib/types'
 import type { PipelineDeal, PipelineStage, SourceChannel, Onboarding } from '@/lib/types'
 
 const STAGES: { key: PipelineStage; label: string; accent: string }[] = [
-  { key: 'new',            label: 'New',            accent: 'border-l-[#636780]' },
-  { key: 'contacted',      label: 'Contacted',      accent: 'border-l-sky-500' },
   { key: 'positive_reply', label: 'Positive Reply', accent: 'border-l-indigo-500' },
   { key: 'booked',         label: 'Booked',         accent: 'border-l-blue-500' },
   { key: 'showed',         label: 'Showed',         accent: 'border-l-amber-500' },
