@@ -432,7 +432,7 @@ export type UpworkMessage = {
   status: 'draft' | 'approved' | 'sent' | 'received'
   created_at: string
 }
-export type PipelineStage = 'new' | 'contacted' | 'positive_reply' | 'booked' | 'showed' | 'proposal' | 'won' | 'lost'
+export type PipelineStage = 'new' | 'contacted' | 'positive_reply' | 'booked' | 'showed' | 'no_show' | 'proposal' | 'won' | 'lost'
 
 export type PipelineDeal = {
   id: string

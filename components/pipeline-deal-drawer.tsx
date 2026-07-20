@@ -20,6 +20,7 @@ const STAGE_OPTIONS: { value: PipelineStage; label: string }[] = [
   { value: 'positive_reply', label: 'Positive Reply' },
   { value: 'booked',         label: 'Booked' },
   { value: 'showed',         label: 'Showed' },
+  { value: 'no_show',        label: 'No Show / Cancelled' },
   { value: 'proposal',       label: 'Proposal' },
   { value: 'won',            label: 'Won' },
   { value: 'lost',           label: 'Lost' },

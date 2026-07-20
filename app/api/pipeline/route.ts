@@ -4,7 +4,7 @@ import { VALID_CHANNELS } from '@/lib/pipeline-constants'
 
 export const dynamic = 'force-dynamic'
 
-const VALID_STAGES = ['new', 'contacted', 'positive_reply', 'booked', 'showed', 'proposal', 'won', 'lost'] as const
+const VALID_STAGES = ['new', 'contacted', 'positive_reply', 'booked', 'showed', 'no_show', 'proposal', 'won', 'lost'] as const
 
 // GET /api/pipeline?stage=&channel=
 export async function GET(req: NextRequest) {

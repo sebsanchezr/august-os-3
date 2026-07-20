@@ -18,6 +18,7 @@ const STAGES: { key: PipelineStage; label: string; accent: string }[] = [
   { key: 'positive_reply', label: 'Positive Reply', accent: 'border-l-indigo-500' },
   { key: 'booked',         label: 'Booked',         accent: 'border-l-blue-500' },
   { key: 'showed',         label: 'Showed',         accent: 'border-l-amber-500' },
+  { key: 'no_show',        label: 'No Show / Cancelled', accent: 'border-l-orange-500' },
   { key: 'proposal',       label: 'Proposal',       accent: 'border-l-purple-500' },
   { key: 'won',            label: 'Won',            accent: 'border-l-green-500' },
   { key: 'lost',           label: 'Lost',           accent: 'border-l-red-500' },
@@ -30,7 +31,7 @@ function formatMoney(amount: number, currency = 'GBP'): string {
 }
 
 function isRotting(deal: PipelineDeal): boolean {
-  if (deal.stage === 'won' || deal.stage === 'lost') return false
+  if (deal.stage === 'won' || deal.stage === 'lost' || deal.stage === 'no_show') return false
   if (!deal.next_action) return true
   if (!deal.next_action_due) return false
   return new Date(deal.next_action_due) < new Date()
