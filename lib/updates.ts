@@ -9,6 +9,7 @@ export async function logUpdate(
   title: string,
   description?: string,
   tag?: OsUpdateTag,
+  commitSha?: string,
 ): Promise<OsUpdate | null> {
   if (!title || !title.trim()) return null
   const supabase = createSupabaseAdmin()
@@ -18,6 +19,7 @@ export async function logUpdate(
       title: title.trim(),
       description: description?.trim() || null,
       tag: tag ?? null,
+      commit_sha: commitSha ?? null,
     })
     .select()
     .single()
@@ -27,6 +29,35 @@ export async function logUpdate(
     return null
   }
   return data as OsUpdate
+}
+
+// Generic key/value cursor store (table: system_state) used by cron jobs that
+// need to remember where they left off, e.g. the changelog cron's last
+// processed commit timestamp. See lib/changelog-server.ts.
+export async function getSystemState(key: string): Promise<string | null> {
+  const supabase = createSupabaseAdmin()
+  const { data, error } = await supabase
+    .from('system_state')
+    .select('value')
+    .eq('key', key)
+    .maybeSingle()
+
+  if (error) {
+    console.error('[getSystemState]', error)
+    return null
+  }
+  return data?.value ?? null
+}
+
+export async function setSystemState(key: string, value: string): Promise<void> {
+  const supabase = createSupabaseAdmin()
+  const { error } = await supabase
+    .from('system_state')
+    .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' })
+
+  if (error) {
+    console.error('[setSystemState]', error)
+  }
 }
 
 export async function fetchLatestUpdates(limit = 20): Promise<OsUpdate[]> {

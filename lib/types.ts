@@ -686,5 +686,6 @@ export type OsUpdate = {
   title: string
   description: string | null
   tag: OsUpdateTag | null
+  commit_sha: string | null
   created_at: string
 }
