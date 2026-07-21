@@ -9,6 +9,7 @@
     { "path": "/api/cron/instantly-sync", "schedule": "30 6 * * *" },
     { "path": "/api/cron/meta-sync", "schedule": "45 5 * * *" },
     { "path": "/api/cron/daily-digest", "schedule": "0 7 * * *" },
-    { "path": "/api/cron/task-archive", "schedule": "0 3 * * *" }
+    { "path": "/api/cron/task-archive", "schedule": "0 3 * * *" },
+    { "path": "/api/cron/team-onboarding", "schedule": "0 8 * * *" }
   ]
 }

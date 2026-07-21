@@ -13,6 +13,10 @@ const PIPELINE_WEBHOOK_URL = process.env.DISCORD_PIPELINE_WEBHOOK_URL || WEBHOOK
 // new secret; set DISCORD_ONBOARDING_WEBHOOK_URL later to route to a dedicated channel.
 const ONBOARDING_WEBHOOK_URL = process.env.DISCORD_ONBOARDING_WEBHOOK_URL || ACCOUNTS_WEBHOOK_URL
 const UPWORK_WEBHOOK_URL = process.env.DISCORD_UPWORK_WEBHOOK_URL || WEBHOOK_URL
+// Falls back to the accounts webhook so team/onboarding notifications work
+// without a new secret; set DISCORD_TEAM_WEBHOOK_URL later to route to a
+// dedicated channel.
+const TEAM_WEBHOOK_URL = process.env.DISCORD_TEAM_WEBHOOK_URL || ACCOUNTS_WEBHOOK_URL
 const OS_URL = 'https://augustosv3.vercel.app'
 
 const PRIORITY_COLOUR: Record<string, number> = {
@@ -684,6 +688,54 @@ export function notifyPostMeetingMessage(
     timestamp: new Date().toISOString(),
   }
   void post(ACCOUNTS_WEBHOOK_URL, `Transcript in. Follow-up message ready for ${client.name}.`, [embed])
+}
+
+// ─── Team & Staff Onboarding notifications ─────────────────────────────────
+
+// New hire: posts a ready-to-forward welcome message in the embed description
+// so Seb can copy it straight into WhatsApp. Fired once, when an onboarding
+// is created (staff_onboardings.welcome_sent flips to true).
+export function notifyStaffWelcome(name: string, role: string): void {
+  const roleLabel = role.replace(/_/g, ' ')
+  const welcomeCopy = `Hey ${name} 👋 Welcome to the August Marketing sales team! Buzzing to have you on the phones. Next steps: sign your contract, send your details so we get your OS login sorted, and Juan will book your intro call. This is 100% commission — the more you call, the more you earn, no cap. Let's make some money. — Team August`
+  const embed: Embed = {
+    title: `New hire: ${name}`,
+    url: `${OS_URL}/team/onboarding`,
+    color: 0x22C55E,
+    description: welcomeCopy,
+    fields: [{ name: 'Role', value: roleLabel, inline: true }],
+    footer: { text: 'August OS Team' },
+    timestamp: new Date().toISOString(),
+  }
+  void post(TEAM_WEBHOOK_URL, `New hire started onboarding: ${name}`, [embed])
+}
+
+// Provision login reminder: fired when an onboarding moves to
+// 'details_collected' — the candidate has sent what's needed for Seb to
+// create their Supabase auth user and add them to lib/access.ts.
+export function notifyProvisionLogin(name: string, email?: string | null): void {
+  const embed: Embed = {
+    title: `Provision OS login: ${name}`,
+    url: `${OS_URL}/team/onboarding`,
+    color: 0x6366F1,
+    description: `Details are in. Create their Supabase auth user and add them to lib/access.ts (COLD_CALLER or FULFILMENT_ONLY as appropriate).${email ? `\n\n**Login email:** ${email}` : ''}`,
+    footer: { text: 'August OS Team' },
+    timestamp: new Date().toISOString(),
+  }
+  void post(TEAM_WEBHOOK_URL, `Provision login for ${name}.`, [embed])
+}
+
+// Generic reminder embed used by the daily team-onboarding cron.
+export function notifyStaffReminder(title: string, body: string): void {
+  const embed: Embed = {
+    title,
+    url: `${OS_URL}/team/onboarding`,
+    color: 0xF59E0B,
+    description: body,
+    footer: { text: 'August OS Team' },
+    timestamp: new Date().toISOString(),
+  }
+  void post(TEAM_WEBHOOK_URL, title, [embed])
 }
 
 // Daily staleness check: metrics ingestion is pushed by the external Mac

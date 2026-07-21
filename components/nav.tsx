@@ -158,6 +158,20 @@ const NAV: NavCategory[] = [
       },
     ],
   },
+  {
+    label: 'Team',
+    sections: [
+      {
+        id: 'team',
+        label: 'Team',
+        icon: Users,
+        items: [
+          { label: 'Members',    href: '/team'            },
+          { label: 'Onboarding', href: '/team/onboarding' },
+        ],
+      },
+    ],
+  },
 ]
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
