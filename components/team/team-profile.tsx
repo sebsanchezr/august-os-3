@@ -118,7 +118,6 @@ function TeamMemberForm({ member, onSaved }: { member: TeamMember; onSaved: (pat
     login_email:       member.login_email ?? '',
     discord_user_id:   member.discord_user_id ?? '',
     start_date:        member.start_date ?? '',
-    commission_notes:  member.commission_notes ?? '',
   })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -149,7 +148,6 @@ function TeamMemberForm({ member, onSaved }: { member: TeamMember; onSaved: (pat
         login_email:       form.login_email || null,
         discord_user_id:   form.discord_user_id || null,
         start_date:        form.start_date || null,
-        commission_notes:  form.commission_notes || null,
       }
       await updateTeamMember(member.id, patch)
       onSaved(patch)
@@ -208,15 +206,6 @@ function TeamMemberForm({ member, onSaved }: { member: TeamMember; onSaved: (pat
           Setting a login email here does not create the Supabase auth user automatically — provision it manually
           and add the address to lib/access.ts.
         </p>
-      </Section>
-
-      <Section title="Commission notes">
-        <textarea
-          className={`${INPUT} resize-none`}
-          rows={3}
-          placeholder="Deal structure, split, notes..."
-          {...field('commission_notes')}
-        />
       </Section>
 
       {error && <p className="text-red-400 text-xs">{error}</p>}

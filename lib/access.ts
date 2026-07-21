@@ -9,11 +9,11 @@ export const COLD_CALLER = ['juanzy509@gmail.com']
 export const FULFILMENT_ONLY = ['juandagato@gmail.com', 'reachalvincases@gmail.com', 'teeagginie1@gmail.com']
 
 // Always visible to any authenticated user, regardless of role.
-const ALWAYS_ALLOWED_PREFIXES = ['/overview', '/updates']
+// '/team' is open to every login so all staff can see the team directory.
+const ALWAYS_ALLOWED_PREFIXES = ['/overview', '/updates', '/team']
 
-// Cold Calling section of the Acquisition category. '/team' is included so
-// the Sales Manager (a cold caller login) can manage the team.
-const COLD_CALLER_PREFIXES = ['/dashboard', '/eod', '/resources', '/websites', '/team']
+// Cold Calling section of the Acquisition category.
+const COLD_CALLER_PREFIXES = ['/dashboard', '/eod', '/resources', '/websites']
 
 // All Fulfilment routes.
 const FULFILMENT_PREFIXES = ['/fulfilment', '/tasks', '/meetings', '/onboarding', '/accounts', '/sop', '/creatives', '/ads']

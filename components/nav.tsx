@@ -158,20 +158,6 @@ const NAV: NavCategory[] = [
       },
     ],
   },
-  {
-    label: 'Team',
-    sections: [
-      {
-        id: 'team',
-        label: 'Team',
-        icon: Users,
-        items: [
-          { label: 'Members',    href: '/team'            },
-          { label: 'Onboarding', href: '/team/onboarding' },
-        ],
-      },
-    ],
-  },
 ]
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -308,6 +294,19 @@ export default function Nav() {
         >
           <Sparkles className="h-[15px] w-[15px] shrink-0" />
           Updates
+        </Link>
+
+        {/* Team — visible to every login */}
+        <Link
+          href="/team"
+          className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
+            itemIsActive('/team', pathname)
+              ? 'bg-[#181b27] text-[#e4e6f0] font-medium'
+              : 'text-[#636780] hover:text-[#e4e6f0] hover:bg-[#181b27]'
+          }`}
+        >
+          <Users className="h-[15px] w-[15px] shrink-0" />
+          Team
         </Link>
 
         {/* Categories */}
