@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Plus, X } from 'lucide-react'
 import type { Profile, Client, TaskTrack, TaskDepartment, TaskPriority, TaskStatus } from '@/lib/types'
+import DateField from './date-field'
 
 type Props = {
   track: TaskTrack
@@ -172,11 +173,11 @@ export default function QuickAdd({ track, profiles, clients, createdBy, autoFocu
           <option value="low">Low</option>
         </select>
 
-        <input
-          type="date"
+        <DateField
           value={dueDate}
-          onChange={(e) => setDueDate(e.target.value)}
-          className={`${selectClass} [color-scheme:dark]`}
+          onChange={(v) => setDueDate(v)}
+          placeholder="Due date"
+          className={`${selectClass} flex items-center gap-1.5 cursor-pointer`}
         />
 
         <button

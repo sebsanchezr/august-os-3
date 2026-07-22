@@ -6,6 +6,7 @@ import type { Task, Profile, Client, TaskComment, TaskEvent, TaskStatus, TaskPri
 import { CREATIVE_COLUMNS, OPS_COLUMNS } from '@/lib/types'
 import { fetchTaskDetail, patchTask, addComment, softDeleteTask } from '@/lib/tasks-client'
 import { initials, avatarColour, formatTimestamp, DEPARTMENT_LABELS, STATUS_LABELS } from '@/lib/task-format'
+import DateField from './date-field'
 
 type Props = {
   taskId: string
@@ -200,7 +201,7 @@ export default function TaskDetail({ taskId, profiles, clients, currentUserId, o
               </div>
               <div>
                 <label className="block text-[10px] uppercase tracking-wide text-[#3d4060] mb-1">Due date</label>
-                <input type="date" value={task.due_date ?? ''} onChange={(e) => apply({ due_date: e.target.value || null })} className={fieldSelect} />
+                <DateField value={task.due_date} onChange={(v) => apply({ due_date: v || null })} className={`${fieldSelect} flex items-center gap-1.5 cursor-pointer`} />
               </div>
             </div>
 

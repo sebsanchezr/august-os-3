@@ -7,6 +7,7 @@ import { CREATIVE_COLUMNS, OPS_COLUMNS, PRIORITY_COLOURS } from '@/lib/types'
 import { useTaskMeta, useCurrentUserId, patchTask, updateStatus, softDeleteTask } from '@/lib/tasks-client'
 import { STATUS_LABELS, DEPARTMENT_LABELS, PRIORITY_LABELS, formatDue, DUE_TONE_CLASS, initials, avatarColour } from '@/lib/task-format'
 import TaskDetail from './task-detail'
+import DateField from './date-field'
 
 type SortKey = 'title' | 'status' | 'assignee' | 'client' | 'priority' | 'due_date'
 const PRIORITY_ORDER: Record<TaskPriority, number> = { urgent: 0, high: 1, normal: 2, low: 3 }
@@ -100,6 +101,8 @@ export default function TaskList() {
   }
 
   async function inlineField(task: Task, body: Record<string, unknown>) {
+    // Optimistic: reflect the edit in the row immediately, then reconcile via refetch.
+    setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, ...body } : t)))
     try { await patchTask(task.id, { ...body, actor_id: currentUserId }); await refetch() } catch { await refetch() }
   }
 
@@ -282,11 +285,11 @@ export default function TaskList() {
                     </td>
                     {/* Due */}
                     <td className="px-2 py-1.5">
-                      <input
-                        type="date"
-                        value={task.due_date ?? ''}
-                        onChange={(e) => inlineField(task, { due_date: e.target.value || null })}
-                        className={`${cellSelect} ${
+                      <DateField
+                        value={task.due_date}
+                        onChange={(v) => inlineField(task, { due_date: v || null })}
+                        placeholder="Set due"
+                        className={`flex items-center gap-1.5 ${cellSelect} ${
                           tone === 'done' ? 'text-green-400' : tone === 'stuck' ? 'text-red-400' : due ? DUE_TONE_CLASS[due.tone] : ''
                         }`}
                       />
