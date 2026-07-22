@@ -4,8 +4,17 @@ import { createSupabaseAdmin } from '@/lib/supabase-server'
 export const dynamic = 'force-dynamic'
 
 const PRICE = 97
+// Pipeline stages. LP inserts 'in_progress' → normalised to 'new'.
+// The customer-facing tracker only reacts to 'delivered'.
+const STAGES = ['new', 'brief', 'production', 'review', 'delivered'] as const
+const VALID = new Set<string>(STAGES)
 
-// GET — list $97 orders + headline metrics
+function normStage(s: string | null): string {
+  if (!s || s === 'in_progress') return 'new'
+  return VALID.has(s) ? s : 'new'
+}
+
+// GET — orders (with normalised stage) + headline metrics
 export async function GET() {
   const supabase = createSupabaseAdmin()
   const { data, error } = await supabase
@@ -16,8 +25,8 @@ export async function GET() {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const orders = data ?? []
-  const delivered = orders.filter((o) => o.status === 'delivered').length
+  const orders = (data ?? []).map((o) => ({ ...o, stage: normStage(o.status) }))
+  const delivered = orders.filter((o) => o.stage === 'delivered').length
   const metrics = {
     total: orders.length,
     delivered,
@@ -27,7 +36,8 @@ export async function GET() {
   return NextResponse.json({ orders, metrics })
 }
 
-// PATCH — mark an order delivered (flips the landing-page tracker to Delivered)
+// PATCH — move an order to a pipeline stage (incl. 'delivered', which flips the
+// customer's landing-page tracker).
 export async function PATCH(req: NextRequest) {
   let body: { id?: string; status?: string }
   try {
@@ -35,15 +45,16 @@ export async function PATCH(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
-  if (!body.id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+  if (!body.id || !body.status || !VALID.has(body.status)) {
+    return NextResponse.json({ error: 'id and valid stage required' }, { status: 400 })
+  }
 
   const supabase = createSupabaseAdmin()
-  const delivered = body.status !== 'in_progress'
   const { error } = await supabase
     .from('ce_website_forms')
     .update({
-      status: delivered ? 'delivered' : 'in_progress',
-      delivered_at: delivered ? new Date().toISOString() : null,
+      status: body.status,
+      delivered_at: body.status === 'delivered' ? new Date().toISOString() : null,
     })
     .eq('id', body.id)
 

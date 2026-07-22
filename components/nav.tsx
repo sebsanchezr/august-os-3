@@ -56,7 +56,6 @@ const NAV: NavCategory[] = [
         icon: TrendingUp,
         items: [
           { label: 'Client Ads', href: '/ads' },
-          { label: '$97 Orders', href: '/paid-ads' },
         ],
       },
       {
@@ -120,6 +119,16 @@ const NAV: NavCategory[] = [
           { label: 'Pipeline',  href: '/cold-email/pipeline' },
           { label: 'Replies',   href: '/cold-email/replies'  },
           { label: 'Leads',     href: '/cold-email/leads'    },
+        ],
+      },
+      {
+        id: 'paid-ads-acq',
+        label: 'Paid Ads',
+        icon: Zap,
+        items: [
+          { label: 'Dashboard', href: '/paid-ads'          },
+          { label: 'Orders',    href: '/paid-ads/orders'   },
+          { label: 'Pipeline',  href: '/paid-ads/pipeline' },
         ],
       },
       {
