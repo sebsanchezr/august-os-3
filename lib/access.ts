@@ -16,7 +16,7 @@ const ALWAYS_ALLOWED_PREFIXES = ['/overview', '/updates', '/team']
 const COLD_CALLER_PREFIXES = ['/dashboard', '/eod', '/resources', '/websites']
 
 // All Fulfilment routes.
-const FULFILMENT_PREFIXES = ['/fulfilment', '/tasks', '/meetings', '/onboarding', '/accounts', '/sop', '/creatives', '/ads']
+const FULFILMENT_PREFIXES = ['/fulfilment', '/tasks', '/meetings', '/onboarding', '/accounts', '/sop', '/creatives', '/ads', '/paid-ads']
 
 function normalize(email: string | null | undefined): string {
   return (email ?? '').trim().toLowerCase()

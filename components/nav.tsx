@@ -56,6 +56,7 @@ const NAV: NavCategory[] = [
         icon: TrendingUp,
         items: [
           { label: 'Client Ads', href: '/ads' },
+          { label: '$97 Orders', href: '/paid-ads' },
         ],
       },
       {
