@@ -1,11 +1,18 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import Link from 'next/link'
-import { AlertTriangle, CheckCircle2, ArrowRight } from 'lucide-react'
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
+import {
+  AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, ChevronUp,
+  ExternalLink, Download, Upload,
+} from 'lucide-react'
 import { KpiCard } from '@/components/kpi-card'
-import { fetchGovDashboard } from '@/lib/pipeline-client'
-import type { GovDashboard, GovInstantlyDaily } from '@/lib/types'
+import {
+  fetchGovDashboard, fetchGovTenders, updateGovTenderStatus,
+  fetchGovBidDocumentUrl, uploadGovBidDocument,
+} from '@/lib/pipeline-client'
+import type { GovDashboard, GovInstantlyDaily, GovTender, GovTenderStatus } from '@/lib/types'
+
+// ─── Outreach helpers ─────────────────────────────────────────────────────────
 
 // How long ago the pipeline last synced, in human terms.
 function relativeAge(iso: string | null): string {
@@ -28,7 +35,7 @@ function InstantlyDaily({ series }: { series: GovInstantlyDaily[] }) {
     <div className="overflow-x-auto">
       <table className="w-full text-xs">
         <thead>
-          <tr className="text-[#636780] text-left border-b border-[#1c2035]">
+          <tr className="text-[#636780] text-left border-b border-[#1c2035] sticky top-0 bg-[#10121a]">
             <th className="py-2 pr-3 font-medium">Date</th>
             <th className="py-2 px-3 font-medium">Sent (cumulative)</th>
             <th className="py-2 px-3 font-medium text-right">Opens</th>
@@ -55,77 +62,468 @@ function InstantlyDaily({ series }: { series: GovInstantlyDaily[] }) {
   )
 }
 
+// ─── Bid Manager helpers ──────────────────────────────────────────────────────
+
+// Statuses at or beyond "bid_drafted" — a document could exist for any of
+// these, either the auto-drafted PDF or a manually uploaded revision.
+const BID_DOCUMENT_STATUSES: GovTenderStatus[] = ['bid_drafted', 'submitted', 'won', 'lost']
+
+// gov_tenders only ever holds actionable rows — screened-out notices
+// (found/off_scope/no_bid/no_contact_email) never sync into the OS, so
+// there's nothing to filter or edit them into here.
+const STATUSES: { key: GovTenderStatus | 'all'; label: string }[] = [
+  { key: 'bid_drafted', label: 'Drafted' },
+  { key: 'submitted', label: 'Submitted' },
+  { key: 'won', label: 'Won' },
+  { key: 'lost', label: 'Lost' },
+  { key: 'pushed_to_instantly', label: 'Sent, No Reply' },
+  { key: 'replied', label: 'Replied' },
+  { key: 'meeting', label: 'Meeting' },
+  { key: 'all', label: 'All' },
+]
+
+const EDITABLE_STATUSES: GovTenderStatus[] = [
+  'pushed_to_instantly', 'replied', 'meeting', 'bid_drafted', 'submitted', 'won', 'lost',
+]
+
+const STATUS_COLOR: Record<string, string> = {
+  pushed_to_instantly: 'text-sky-400',
+  replied: 'text-indigo-400',
+  meeting: 'text-purple-400',
+  bid_drafted: 'text-amber-400',
+  submitted: 'text-blue-400',
+  won: 'text-green-400',
+  lost: 'text-red-400',
+}
+
+function formatMoney(amount: number | null): string {
+  if (amount == null) return '—'
+  return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 }).format(amount)
+}
+
+// Days from today (midnight) until the given date. null if unparseable.
+function daysUntil(dateStr: string | null | undefined): number | null {
+  if (!dateStr) return null
+  const d = new Date(dateStr)
+  if (Number.isNaN(d.getTime())) return null
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  d.setHours(0, 0, 0, 0)
+  return Math.round((d.getTime() - today.getTime()) / (24 * 60 * 60 * 1000))
+}
+
+// Countdown badge: red <7 days (or overdue), amber <14 days, grey otherwise
+// or when no deadline is set. deadline is optional (migration 050).
+function DeadlineBadge({ deadline }: { deadline: string | null | undefined }) {
+  const days = daysUntil(deadline)
+  if (days == null) {
+    return <span className="inline-block px-2 py-0.5 rounded text-[11px] bg-[#181b27] text-[#636780]">No deadline</span>
+  }
+  let cls = 'bg-[#181b27] text-[#8b8fa8]'
+  if (days < 7) cls = 'bg-red-950/50 text-red-300 border border-red-900/60'
+  else if (days < 14) cls = 'bg-amber-950/40 text-amber-300 border border-amber-900/50'
+
+  const label = days < 0 ? `Overdue ${Math.abs(days)}d` : days === 0 ? 'Due today' : `${days}d left`
+  return (
+    <span className={`inline-block px-2 py-0.5 rounded text-[11px] whitespace-nowrap ${cls}`} title={deadline ?? ''}>
+      {label}
+    </span>
+  )
+}
+
+// Domain label for the "Submit at" link. Strips protocol + www.
+function domainOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '')
+  } catch {
+    return url.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0]
+  }
+}
+
+function Detail({ label, value }: { label: string; value: string | null | undefined }) {
+  return (
+    <div>
+      <p className="text-[10px] uppercase tracking-wide text-[#636780] mb-1">{label}</p>
+      <p className="text-[#e4e6f0] break-words">{value || <span className="text-[#3a3d52]">—</span>}</p>
+    </div>
+  )
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 export default function GovContractsPage() {
+  // Outreach dashboard state
   const [data, setData] = useState<GovDashboard | null>(null)
+  const [dashLoading, setDashLoading] = useState(true)
+  const [outreachOpen, setOutreachOpen] = useState(true)
+
+  // Bid Manager state
+  const [filter, setFilter] = useState<GovTenderStatus | 'all'>('bid_drafted')
+  const [rows, setRows] = useState<GovTender[]>([])
   const [loading, setLoading] = useState(true)
+  const [savingId, setSavingId] = useState<string | null>(null)
+  const [docBusyId, setDocBusyId] = useState<string | null>(null)
+  const [docError, setDocError] = useState<string | null>(null)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [notesDraft, setNotesDraft] = useState<Record<string, string>>({})
+  const [notesSavingId, setNotesSavingId] = useState<string | null>(null)
+  const uploadTargetRef = useRef<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     let cancelled = false
     fetchGovDashboard()
       .then((res) => { if (!cancelled) setData(res) })
-      .finally(() => { if (!cancelled) setLoading(false) })
+      .finally(() => { if (!cancelled) setDashLoading(false) })
     return () => { cancelled = true }
   }, [])
 
+  const refetch = useCallback(async (status: GovTenderStatus | 'all') => {
+    try {
+      // Submission cockpit always ranks by soonest deadline (nulls last).
+      const tenders = await fetchGovTenders(status, 'deadline')
+      setRows(tenders)
+    } catch { /* no-op */ }
+  }, [])
+
+  useEffect(() => {
+    setLoading(true)
+    refetch(filter).finally(() => setLoading(false))
+  }, [filter, refetch])
+
+  async function handleStatusChange(notice_id: string, status: GovTenderStatus) {
+    setSavingId(notice_id)
+    try {
+      await updateGovTenderStatus(notice_id, status)
+      await refetch(filter)
+    } finally {
+      setSavingId(null)
+    }
+  }
+
+  async function handleMarkSubmitted(notice_id: string) {
+    await handleStatusChange(notice_id, 'submitted')
+  }
+
+  async function handleViewBid(notice_id: string) {
+    setDocError(null)
+    setDocBusyId(notice_id)
+    try {
+      const url = await fetchGovBidDocumentUrl(notice_id)
+      window.open(url, '_blank', 'noopener,noreferrer')
+    } catch (e) {
+      setDocError(e instanceof Error ? e.message : 'Failed to open bid document')
+    } finally {
+      setDocBusyId(null)
+    }
+  }
+
+  function handleUploadClick(notice_id: string) {
+    uploadTargetRef.current = notice_id
+    fileInputRef.current?.click()
+  }
+
+  async function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    const notice_id = uploadTargetRef.current
+    e.target.value = ''
+    if (!file || !notice_id) return
+
+    setDocError(null)
+    setDocBusyId(notice_id)
+    try {
+      await uploadGovBidDocument(notice_id, file)
+      await refetch(filter)
+    } catch (err) {
+      setDocError(err instanceof Error ? err.message : 'Failed to upload bid document')
+    } finally {
+      setDocBusyId(null)
+    }
+  }
+
+  function toggleExpand(r: GovTender) {
+    if (expandedId === r.notice_id) {
+      setExpandedId(null)
+      return
+    }
+    setNotesDraft((d) => ({ ...d, [r.notice_id]: r.notes ?? '' }))
+    setExpandedId(r.notice_id)
+  }
+
+  async function handleSaveNotes(r: GovTender) {
+    setNotesSavingId(r.notice_id)
+    try {
+      await updateGovTenderStatus(r.notice_id, r.status, notesDraft[r.notice_id] ?? '')
+      await refetch(filter)
+    } finally {
+      setNotesSavingId(null)
+    }
+  }
+
+  const COLS = 9
+
   return (
     <div className="p-6 min-h-screen bg-[#08090c]">
-      <div className="flex items-center justify-between mb-6">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="application/pdf"
+        className="hidden"
+        onChange={handleFileSelected}
+      />
+
+      {/* Compact header with inline pipeline health */}
+      <div className="flex items-center justify-between gap-4 mb-6 flex-wrap">
         <div>
           <h1 className="text-xl font-semibold text-[#e4e6f0]">Gov Contracts</h1>
-          <p className="text-xs text-[#636780] mt-1">Bids in progress and buyer outreach via Instantly</p>
+          <p className="text-xs text-[#636780] mt-1">Buyer outreach via Instantly and the live bid submission queue</p>
         </div>
-        <Link
-          href="/gov-contracts/bids"
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-indigo-600 text-white hover:bg-indigo-500 transition-colors"
-        >
-          Open Bid Manager <ArrowRight size={13} />
-        </Link>
-      </div>
-
-      {loading || !data ? (
-        <div className="flex items-center justify-center h-64">
-          <span className="text-sm text-[#636780]">Loading gov contracts data...</span>
-        </div>
-      ) : (
-        <>
-          {/* Pipeline health strip */}
-          <div className={`flex items-center gap-2 mb-6 px-3 py-2 rounded-lg border text-xs w-fit ${
+        {data && (
+          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs ${
             data.sync_stale
-              ? 'bg-amber-950/30 border-amber-900/50 text-amber-300'
+              ? 'bg-red-950/30 border-red-900/60 text-red-300'
               : 'bg-[#10121a] border-[#1c2035] text-[#8b8fa8]'
           }`}>
             {data.sync_stale ? <AlertTriangle size={13} /> : <CheckCircle2 size={13} className="text-green-400" />}
             <span>
-              Pipeline last synced {relativeAge(data.last_sync)}
-              {data.sync_stale && ' — stale (over 48h). Check the gov engine cron.'}
+              Last synced {relativeAge(data.last_sync)}
+              {data.sync_stale && '. Stale (over 48h), check the gov engine cron.'}
             </span>
           </div>
+        )}
+      </div>
 
-          {/* KPI row */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-            <KpiCard compact label="Awaiting Submission" value={data.awaiting_submission} accent="amber" />
-            <KpiCard compact label="Submitted" value={data.submitted_count} accent="blue" />
-            <KpiCard compact label="Won" value={data.won_count} accent="green" />
-            <KpiCard compact label="Deadlines Next 14d" value={data.deadlines_14d} accent="amber" />
-            <KpiCard compact label="Emails Sent" value={data.emails_sent_total} accent="default" />
-            <KpiCard compact label="Replies" value={data.replies_total} accent="default" />
+      {/* ─── OUTREACH (context) ─────────────────────────────────────────── */}
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-[11px] font-semibold uppercase tracking-[0.13em] text-[#636780]">Outreach</h2>
+          <button
+            onClick={() => setOutreachOpen((v) => !v)}
+            className="inline-flex items-center gap-1 text-[10px] text-[#636780] hover:text-[#e4e6f0] transition-colors"
+          >
+            {outreachOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+            {outreachOpen ? 'Hide' : 'Show'} 30-day detail
+          </button>
+        </div>
+
+        {dashLoading || !data ? (
+          <div className="flex items-center h-20 px-4 rounded-xl border border-[#1c2035] bg-[#10121a]">
+            <span className="text-xs text-[#636780]">Loading outreach data...</span>
           </div>
-
-          {/* Instantly daily outreach */}
-          <div className="bg-[#10121a] border border-[#1c2035] rounded-xl p-5 mb-6">
-            <div className="flex items-center justify-between mb-1">
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-[#636780]">Instantly Outreach</h2>
-              <span className="text-[10px] text-[#3a3d52]">Last 30 days</span>
+        ) : (
+          <>
+            {/* Compact KPI strip */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <KpiCard compact label="Emails Sent" value={data.emails_sent_total} accent="default" />
+              <KpiCard compact label="Opens" value={data.instantly?.opens_total ?? 0} accent="default" />
+              <KpiCard compact label="Replies" value={data.replies_total} accent="blue" />
+              <KpiCard compact label="Active Leads" value={data.outreach_count} accent="default" />
             </div>
-            <p className="text-[10px] text-[#3a3d52] mb-4">Daily snapshot of the gov Instantly campaign (cumulative totals per day)</p>
-            <InstantlyDaily series={data.instantly_series} />
-          </div>
 
-          <p className="text-[10px] text-[#3a3d52]">
-            Only tenders that reached outreach or bidding show here — screened-out notices are dropped before they sync. Submitted / Won / Lost are set in the Bid Manager.
-          </p>
-        </>
-      )}
+            {/* 30-day daily table, capped height so it never buries the bids */}
+            {outreachOpen && (
+              <div className="mt-3 bg-[#10121a] border border-[#1c2035] rounded-xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[10px] uppercase tracking-wide text-[#636780]">Instantly daily, cumulative totals</span>
+                  <span className="text-[10px] text-[#3a3d52]">Last 30 days</span>
+                </div>
+                <div className="max-h-56 overflow-y-auto">
+                  <InstantlyDaily series={data.instantly_series} />
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* ─── BIDS (primary working surface) ─────────────────────────────── */}
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="text-[11px] font-semibold uppercase tracking-[0.13em] text-[#636780]">Bids</h2>
+          <span className="bg-[#10121a] border border-[#1c2035] rounded-lg px-3 py-1.5 text-xs text-[#e4e6f0] tabular-nums">
+            {rows.length} tenders
+          </span>
+        </div>
+        <p className="text-xs text-[#636780] mb-5">Submission cockpit, soonest deadline first. Download the bid, submit on the portal, then mark it submitted.</p>
+
+        {docError && (
+          <div className="mb-4 px-3 py-2 rounded-lg bg-red-950/40 border border-red-900 text-xs text-red-300 w-fit">
+            {docError}
+          </div>
+        )}
+
+        <div className="flex items-center gap-1 bg-[#10121a] border border-[#1c2035] rounded-lg p-1 mb-5 flex-wrap w-fit">
+          {STATUSES.map((s) => (
+            <button
+              key={s.key}
+              onClick={() => setFilter(s.key)}
+              className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                filter === s.key ? 'bg-indigo-600 text-white' : 'text-[#636780] hover:text-[#e4e6f0]'
+              }`}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center h-64">
+            <span className="text-sm text-[#636780]">Loading bids...</span>
+          </div>
+        ) : (
+          <div className="bg-[#10121a] border border-[#1c2035] rounded-xl overflow-hidden">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-[#636780] text-left border-b border-[#1c2035]">
+                  <th className="p-3 font-medium w-6"></th>
+                  <th className="p-3 font-medium">Title</th>
+                  <th className="p-3 font-medium">Authority</th>
+                  <th className="p-3 font-medium">Deadline</th>
+                  <th className="p-3 font-medium text-right">Value</th>
+                  <th className="p-3 font-medium">Bid PDF</th>
+                  <th className="p-3 font-medium">Submit at</th>
+                  <th className="p-3 font-medium">Found</th>
+                  <th className="p-3 font-medium">Status</th>
+                </tr>
+              </thead>
+              <tbody className="text-[#e4e6f0]">
+                {rows.length === 0 ? (
+                  <tr><td className="p-6 text-[#636780]" colSpan={COLS}>No tenders in this view.</td></tr>
+                ) : (
+                  rows.map((r) => {
+                    const submitUrl = r.portal ?? r.notice_url
+                    const hasDoc = !!r.bid_document_path
+                    const isExpanded = expandedId === r.notice_id
+                    return (
+                      <Fragment key={r.notice_id}>
+                        <tr
+                          className="border-b border-[#1c2035] hover:bg-[#181b27] cursor-pointer"
+                          onClick={() => toggleExpand(r)}
+                        >
+                          <td className="p-3 text-[#636780]">
+                            {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                          </td>
+                          <td className="p-3 max-w-xs truncate" title={r.title ?? ''}>{r.title ?? 'Untitled'}</td>
+                          <td className="p-3 max-w-[160px] truncate" title={r.authority ?? ''}>{r.authority ?? '—'}</td>
+                          <td className="p-3"><DeadlineBadge deadline={r.deadline} /></td>
+                          <td className="p-3 text-right tabular-nums">{formatMoney(r.award_value_gbp)}</td>
+                          <td className="p-3" onClick={(e) => e.stopPropagation()}>
+                            {BID_DOCUMENT_STATUSES.includes(r.status) ? (
+                              <div className="flex items-center gap-2 whitespace-nowrap">
+                                {hasDoc && (
+                                  <button
+                                    onClick={() => handleViewBid(r.notice_id)}
+                                    disabled={docBusyId === r.notice_id}
+                                    className="inline-flex items-center gap-1 text-indigo-400 hover:text-indigo-300 disabled:opacity-50"
+                                  >
+                                    <Download size={12} /> PDF
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => handleUploadClick(r.notice_id)}
+                                  disabled={docBusyId === r.notice_id}
+                                  className="inline-flex items-center gap-1 text-[#636780] hover:text-[#e4e6f0] disabled:opacity-50"
+                                >
+                                  <Upload size={12} /> {hasDoc ? 'Revision' : 'Upload'}
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="text-[#3a3d52]">—</span>
+                            )}
+                          </td>
+                          <td className="p-3" onClick={(e) => e.stopPropagation()}>
+                            {submitUrl ? (
+                              <a
+                                href={submitUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-indigo-400 hover:text-indigo-300 max-w-[150px] truncate"
+                                title={submitUrl}
+                              >
+                                <ExternalLink size={12} className="shrink-0" />
+                                <span className="truncate">{domainOf(submitUrl)}</span>
+                              </a>
+                            ) : (
+                              <span className="text-[#3a3d52]">—</span>
+                            )}
+                          </td>
+                          <td className="p-3 tabular-nums text-[#636780]">{r.date_added ?? '—'}</td>
+                          <td className="p-3" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center gap-2 whitespace-nowrap">
+                              <select
+                                value={r.status}
+                                disabled={savingId === r.notice_id}
+                                onChange={(e) => handleStatusChange(r.notice_id, e.target.value as GovTenderStatus)}
+                                className={`bg-[#181b27] border border-[#1c2035] rounded px-1.5 py-1 text-xs disabled:opacity-50 ${STATUS_COLOR[r.status] ?? 'text-[#e4e6f0]'}`}
+                              >
+                                {EDITABLE_STATUSES.map((s) => (
+                                  <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>
+                                ))}
+                              </select>
+                              {r.status === 'bid_drafted' && hasDoc && (
+                                <button
+                                  onClick={() => handleMarkSubmitted(r.notice_id)}
+                                  disabled={savingId === r.notice_id}
+                                  className="inline-flex items-center gap-1 text-green-400 hover:text-green-300 disabled:opacity-50"
+                                  title="Mark this bid as submitted"
+                                >
+                                  <CheckCircle2 size={12} /> Submitted
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                        {isExpanded && (
+                          <tr className="border-b border-[#1c2035] bg-[#0c0e14]">
+                            <td></td>
+                            <td colSpan={COLS - 1} className="p-4">
+                              <div className="grid grid-cols-2 gap-x-8 gap-y-3 max-w-3xl">
+                                <Detail label="Buyer" value={r.buyer_name} />
+                                <Detail label="Buyer email" value={r.buyer_email} />
+                                <Detail label="CPV" value={r.cpv} />
+                                <Detail label="Incumbent" value={r.incumbent} />
+                                <div className="col-span-2">
+                                  <p className="text-[10px] uppercase tracking-wide text-[#636780] mb-1">Notice URL</p>
+                                  {r.notice_url ? (
+                                    <a href={r.notice_url} target="_blank" rel="noreferrer" className="text-indigo-400 hover:text-indigo-300 break-all">
+                                      {r.notice_url}
+                                    </a>
+                                  ) : <span className="text-[#3a3d52]">—</span>}
+                                </div>
+                                <div className="col-span-2">
+                                  <p className="text-[10px] uppercase tracking-wide text-[#636780] mb-1">Notes</p>
+                                  <textarea
+                                    value={notesDraft[r.notice_id] ?? ''}
+                                    onChange={(e) => setNotesDraft((d) => ({ ...d, [r.notice_id]: e.target.value }))}
+                                    rows={3}
+                                    className="w-full bg-[#10121a] border border-[#1c2035] rounded-lg p-2 text-xs text-[#e4e6f0] focus:outline-none focus:border-indigo-600"
+                                    placeholder="Internal notes on this tender..."
+                                  />
+                                  <button
+                                    onClick={() => handleSaveNotes(r)}
+                                    disabled={notesSavingId === r.notice_id}
+                                    className="mt-2 px-3 py-1 rounded-md text-xs font-medium bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-50"
+                                  >
+                                    {notesSavingId === r.notice_id ? 'Saving...' : 'Save notes'}
+                                  </button>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    )
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <p className="text-[10px] text-[#3a3d52] mt-4">
+          Only tenders that reached outreach or bidding show here. Screened-out notices are dropped before they sync. Submitted / Won / Lost are set above.
+        </p>
+      </div>
     </div>
   )
 }

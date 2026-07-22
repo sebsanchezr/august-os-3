@@ -154,8 +154,7 @@ const NAV: NavCategory[] = [
         label: 'Gov Contracts',
         icon: FileText,
         items: [
-          { label: 'Dashboard',    href: '/gov-contracts'      },
-          { label: 'Bid Manager',  href: '/gov-contracts/bids' },
+          { label: 'Gov Contracts', href: '/gov-contracts' },
         ],
       },
       {
