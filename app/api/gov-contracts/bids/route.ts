@@ -13,12 +13,28 @@ type Status = typeof VALID_STATUSES[number]
 
 export async function GET(req: NextRequest) {
   const supabase = createSupabaseAdmin()
-  const status = new URL(req.url).searchParams.get('status')
+  const params = new URL(req.url).searchParams
+  const status = params.get('status')
+  const sort = params.get('sort')
 
-  let query = supabase.from('gov_tenders').select('*').order('contract_end', { ascending: true, nullsFirst: false })
-  if (status && status !== 'all') query = query.eq('status', status)
+  // Default sort keeps the old contract_end ordering. The Bid Manager's submit
+  // queue asks for sort=deadline (soonest deadline first, nulls last). Both
+  // deadline and contract_end are nullable — nullsFirst:false pushes blanks down.
+  const wantDeadline = sort === 'deadline'
+  const sortCol = wantDeadline ? 'deadline' : 'contract_end'
 
-  const { data, error } = await query
+  const runQuery = (col: string) => {
+    let q = supabase.from('gov_tenders').select('*').order(col, { ascending: true, nullsFirst: false })
+    if (status && status !== 'all') q = q.eq('status', status)
+    return q
+  }
+
+  let { data, error } = await runQuery(sortCol)
+  // The deadline column ships in migration 050; if it isn't applied yet the
+  // sort errors. Fall back to contract_end so the page still renders.
+  if (error && wantDeadline) {
+    ;({ data, error } = await runQuery('contract_end'))
+  }
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ tenders: data ?? [] })
 }

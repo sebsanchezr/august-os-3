@@ -15,7 +15,9 @@ export async function GET() {
     const supabase = createSupabaseAdmin()
 
     const [{ data: tenders, error: tendersErr }, { data: instantlySeries, error: instantlyErr }] = await Promise.all([
-      supabase.from('gov_tenders').select('status'),
+      // deadline + synced_at are optional (migration 050) — selecting * keeps
+      // this working whether or not the columns exist yet.
+      supabase.from('gov_tenders').select('*'),
       supabase.from('gov_instantly_daily').select('*').order('date', { ascending: true }).limit(90),
     ])
 
@@ -34,6 +36,31 @@ export async function GET() {
     const wonCount = rows.filter((r) => r.status === 'won').length
     const win_rate = decidedCount > 0 ? wonCount / decidedCount : 0
 
+    // Bid Manager KPI row
+    const awaiting_submission = rows.filter((r) => r.status === 'bid_drafted').length
+    const submitted_count = rows.filter((r) => r.status === 'submitted').length
+    const won_count = wonCount
+
+    // Deadlines in the next 14 days (only rows that actually carry a deadline).
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const in14 = new Date(today)
+    in14.setDate(in14.getDate() + 14)
+    const deadlines_14d = rows.filter((r) => {
+      const d = r.deadline ? new Date(r.deadline) : null
+      return d != null && !Number.isNaN(d.getTime()) && d >= today && d <= in14
+    }).length
+
+    // Pipeline health: newest synced_at across all tenders + stale >48h flag.
+    let last_sync: string | null = null
+    for (const r of rows) {
+      const s = (r as { synced_at?: string | null }).synced_at
+      if (s && (last_sync == null || s > last_sync)) last_sync = s
+    }
+    const sync_stale = last_sync != null
+      ? (Date.now() - new Date(last_sync).getTime()) > 48 * 60 * 60 * 1000
+      : true
+
     const series = (instantlySeries ?? []) as GovInstantlyDaily[]
     const latest = series.length > 0 ? series[series.length - 1] : null
 
@@ -42,6 +69,14 @@ export async function GET() {
       outreach_count,
       bids_count,
       win_rate,
+      awaiting_submission,
+      submitted_count,
+      won_count,
+      deadlines_14d,
+      emails_sent_total: latest?.emails_sent_total ?? 0,
+      replies_total: latest?.replies_total ?? 0,
+      last_sync,
+      sync_stale,
       instantly: latest,
       instantly_series: series,
       updated_at: latest?.date ?? null,

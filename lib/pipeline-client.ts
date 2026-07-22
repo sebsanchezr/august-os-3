@@ -71,9 +71,12 @@ export async function fetchGovDashboard(): Promise<GovDashboard> {
   return res.json()
 }
 
-export async function fetchGovTenders(status?: GovTenderStatus | 'all'): Promise<GovTender[]> {
-  const qs = status && status !== 'all' ? `?status=${status}` : ''
-  const res = await fetch(`/api/gov-contracts/bids${qs}`, { cache: 'no-store' })
+export async function fetchGovTenders(status?: GovTenderStatus | 'all', sort?: 'deadline'): Promise<GovTender[]> {
+  const params = new URLSearchParams()
+  if (status && status !== 'all') params.set('status', status)
+  if (sort) params.set('sort', sort)
+  const qs = params.toString()
+  const res = await fetch(`/api/gov-contracts/bids${qs ? `?${qs}` : ''}`, { cache: 'no-store' })
   if (!res.ok) throw new Error('Failed to load gov tenders')
   const json = await res.json()
   return json.tenders

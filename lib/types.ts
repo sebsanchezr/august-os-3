@@ -504,6 +504,11 @@ export type GovTender = {
   last_update: string | null
   notes: string | null
   bid_document_path: string | null
+  // Added in migration 050 — optional so the UI renders before the migration
+  // is applied (these come back undefined until the column exists + is synced).
+  deadline?: string | null
+  portal?: string | null
+  portal_kind?: string | null
 }
 
 export type GovInstantlyDaily = {
@@ -521,6 +526,16 @@ export type GovDashboard = {
   outreach_count: number
   bids_count: number
   win_rate: number
+  // Bid Manager KPI row
+  awaiting_submission: number
+  submitted_count: number
+  won_count: number
+  deadlines_14d: number
+  emails_sent_total: number
+  replies_total: number
+  // Pipeline health: latest sync + whether it is stale (>48h)
+  last_sync: string | null
+  sync_stale: boolean
   instantly: GovInstantlyDaily | null
   instantly_series: GovInstantlyDaily[]
   updated_at: string | null
