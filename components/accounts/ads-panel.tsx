@@ -160,16 +160,6 @@ export default function AdsPanel({ accountId, connected }: { accountId: string; 
     }))
   }, [detail])
 
-  // Freshness of the underlying daily metrics (populated by the reporter),
-  // derived from the real data rather than any hardcoded token assumption.
-  const freshness = useMemo(() => {
-    const dates = (detail?.metrics ?? []).map((m) => m.date).filter(Boolean).sort()
-    const latest = dates[dates.length - 1] ?? null
-    if (!latest) return { latest: null as string | null, daysOld: null as number | null, stale: false }
-    const daysOld = Math.floor((Date.now() - new Date(latest).getTime()) / 86400000)
-    return { latest, daysOld, stale: daysOld > 2 }
-  }, [detail])
-
   async function handleGenerateRecommendations() {
     setRecLoading(true)
     setRecError(null)
@@ -227,19 +217,7 @@ export default function AdsPanel({ accountId, connected }: { accountId: string; 
         </div>
 
         {recError && <p className="text-xs text-red-400 mt-3">{recError}</p>}
-
-        {freshness.latest ? (
-          <p className={`text-[10px] mt-3 mb-3 ${freshness.stale ? 'text-amber-400' : 'text-[#636780]'}`}>
-            {freshness.stale
-              ? `Metrics look stale: last data ${formatDate(freshness.latest)} (${freshness.daysOld}d ago). Check the reporter is running. `
-              : `Metrics current to ${formatDate(freshness.latest)}. `}
-            The brief reads only real ingested numbers. Nothing is fabricated.
-          </p>
-        ) : (
-          <p className="text-[10px] text-amber-400 mt-3 mb-3">
-            No performance data ingested for this account yet. Confirm the ad account is shared with the reporter. Nothing is fabricated.
-          </p>
-        )}
+        <div className="mt-3" />
 
         {run ? (
           <>
