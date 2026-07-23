@@ -17,6 +17,10 @@ const UPWORK_WEBHOOK_URL = process.env.DISCORD_UPWORK_WEBHOOK_URL || WEBHOOK_URL
 // without a new secret; set DISCORD_TEAM_WEBHOOK_URL later to route to a
 // dedicated channel.
 const TEAM_WEBHOOK_URL = process.env.DISCORD_TEAM_WEBHOOK_URL || ACCOUNTS_WEBHOOK_URL
+// Pulse agent channel (where Seb gets ops alerts). Set DISCORD_PULSE_WEBHOOK_URL
+// to the pulse Discord webhook; falls back to the accounts webhook so Meta
+// health alerts still land somewhere until the dedicated hook is wired.
+const PULSE_WEBHOOK_URL = process.env.DISCORD_PULSE_WEBHOOK_URL || ACCOUNTS_WEBHOOK_URL
 const OS_URL = 'https://augustosv3.vercel.app'
 
 const PRIORITY_COLOUR: Record<string, number> = {
@@ -736,6 +740,49 @@ export function notifyStaffReminder(title: string, body: string): void {
     timestamp: new Date().toISOString(),
   }
   void post(TEAM_WEBHOOK_URL, title, [embed])
+}
+
+// ─── Meta connection health (pulse agent) ──────────────────────────────────
+
+// Fired by the daily meta-health cron only when something needs a human: the
+// access token is invalid/expired, or client ad accounts are no longer shared
+// with our system user (so server-side ingestion silently returns nothing).
+// Routes to the pulse channel so Seb sees it alongside other ops alerts.
+export function notifyMetaHealth(opts: {
+  tokenOk: boolean
+  tokenDetail: string
+  expiringInDays: number | null
+  unsharedAccounts: { name: string; account_id: string }[]
+}): void {
+  const { tokenOk, tokenDetail, expiringInDays, unsharedAccounts } = opts
+  const critical = !tokenOk
+  const fields: { name: string; value: string; inline?: boolean }[] = [
+    { name: 'Token', value: tokenOk ? '✅ valid' : '❌ invalid / expired', inline: true },
+  ]
+  if (expiringInDays !== null) {
+    fields.push({ name: 'Expires in', value: `${expiringInDays}d`, inline: true })
+  }
+  if (unsharedAccounts.length) {
+    fields.push({
+      name: `Ad accounts not shared (${unsharedAccounts.length})`,
+      value: fmtField(unsharedAccounts.map((a) => `- ${a.name} (${a.account_id})`).join('\n')),
+    })
+  }
+  const embed: Embed = {
+    title: critical ? '🔴 Meta connection needs reauth' : '⚠️ Meta connection: action needed',
+    url: `${OS_URL}/accounts`,
+    color: critical ? 0xEF4444 : 0xF59E0B,
+    description: critical
+      ? `The Meta access token is not usable: ${tokenDetail}. Server-side ad ingestion is down until it is reconnected. Generate a fresh System User token in Business Settings and update META_ACCESS_TOKEN in Vercel.`
+      : `The Meta access token is valid but expiring soon${expiringInDays !== null ? ` (${expiringInDays}d)` : ''}. Rotate it before it lapses: generate a fresh System User token in Business Settings and update META_ACCESS_TOKEN in Vercel.${unsharedAccounts.length ? ' Accounts not visible to this token are listed below for reference.' : ''}`,
+    fields,
+    footer: { text: 'August OS · Meta health' },
+    timestamp: new Date().toISOString(),
+  }
+  const content = critical
+    ? '@here Meta token is down. Ad metrics ingestion has stopped until it is reconnected.'
+    : 'Meta health: client ad accounts need sharing (see below).'
+  void post(PULSE_WEBHOOK_URL, content, [embed])
 }
 
 // Daily staleness check: metrics ingestion is pushed by the external Mac

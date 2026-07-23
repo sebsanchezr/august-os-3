@@ -136,6 +136,75 @@ async function callGraph(path: string, params: Record<string, string>): Promise<
   return { ok: true, data: json.data ?? [] }
 }
 
+// ─── Token health ───────────────────────────────────────────────────────────
+// Hits the Graph debug_token endpoint to check the configured token is still
+// valid. A system-user token has expires_at === 0 (never expires); a user token
+// carries a real unix expiry we can warn on before it lapses.
+
+export type MetaTokenHealth = {
+  valid: boolean
+  type: string | null          // 'SYSTEM_USER' | 'USER' | ...
+  appId: string | null
+  scopes: string[]
+  expiresAt: number            // unix seconds, 0 = never
+  daysUntilExpiry: number | null
+  error: string | null
+}
+
+export async function checkMetaTokenHealth(): Promise<MetaTokenHealth> {
+  const token = process.env.META_ACCESS_TOKEN
+  const base: MetaTokenHealth = {
+    valid: false, type: null, appId: null, scopes: [], expiresAt: 0, daysUntilExpiry: null, error: null,
+  }
+  if (!token) return { ...base, error: 'META_ACCESS_TOKEN is not configured' }
+
+  let res: Response
+  try {
+    res = await fetch(
+      `${GRAPH_BASE}/debug_token?input_token=${encodeURIComponent(token)}&access_token=${encodeURIComponent(token)}`,
+      { cache: 'no-store' },
+    )
+  } catch (err) {
+    return { ...base, error: err instanceof Error ? err.message : 'Network error calling Meta API' }
+  }
+
+  let json: { data?: { is_valid?: boolean; type?: string; app_id?: string; scopes?: string[]; expires_at?: number }; error?: { message?: string } }
+  try {
+    json = await res.json()
+  } catch {
+    return { ...base, error: `Meta API returned non-JSON response (status ${res.status})` }
+  }
+
+  if (json.error) return { ...base, error: json.error.message ?? 'Meta API error' }
+
+  const d = json.data ?? {}
+  const expiresAt = d.expires_at ?? 0
+  const daysUntilExpiry = expiresAt > 0 ? Math.floor((expiresAt * 1000 - Date.now()) / 86400000) : null
+  return {
+    valid: Boolean(d.is_valid),
+    type: d.type ?? null,
+    appId: d.app_id ?? null,
+    scopes: d.scopes ?? [],
+    expiresAt,
+    daysUntilExpiry,
+    error: d.is_valid ? null : 'Token reported invalid by Meta',
+  }
+}
+
+// Returns the raw account ids (no act_ prefix) the configured token can actually
+// read. Used by the health cron to catch clients whose ad account has not been
+// shared with our system user, which is the silent cause of "connected but no
+// data" when ingestion runs server-side.
+export async function listAccessibleAdAccountIds(): Promise<MetaResult<Set<string>>> {
+  const res = await graphGetAll<{ account_id?: string }>(`/me/adaccounts`, { fields: 'account_id' })
+  if (!res.ok) return res
+  const ids = new Set<string>()
+  for (const row of res.data) {
+    if (row.account_id) ids.add(row.account_id.replace(/^act_/, ''))
+  }
+  return { ok: true, data: ids }
+}
+
 function rowToDailyInsight(row: MetaInsightRow): MetaDailyInsight {
   const spend = num(row.spend)
   const purchases = sumActions(row.actions, PURCHASE_ACTION_TYPES)
@@ -170,7 +239,7 @@ export async function fetchAccountInsights(
   sinceYYYYMMDD: string,
   untilYYYYMMDD: string,
 ): Promise<MetaResult<MetaDailyInsight[]>> {
-  const res = await callGraph(`/${accountId}/insights`, {
+  const res = await callGraph(`/${withActPrefix(accountId)}/insights`, {
     time_range: JSON.stringify({ since: sinceYYYYMMDD, until: untilYYYYMMDD }),
     time_increment: '1',
     fields: 'spend,impressions,clicks,ctr,actions,action_values,purchase_roas',
@@ -187,7 +256,7 @@ export async function fetchCampaignBreakdown(
   sinceYYYYMMDD: string,
   untilYYYYMMDD: string,
 ): Promise<MetaResult<MetaCampaignInsight[]>> {
-  const res = await callGraph(`/${accountId}/insights`, {
+  const res = await callGraph(`/${withActPrefix(accountId)}/insights`, {
     time_range: JSON.stringify({ since: sinceYYYYMMDD, until: untilYYYYMMDD }),
     level: 'campaign',
     fields: 'campaign_name,spend,impressions,clicks,ctr,actions,action_values,purchase_roas',

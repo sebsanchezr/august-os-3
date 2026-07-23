@@ -62,11 +62,10 @@ function money(n: number): string {
   return `£${n.toFixed(2)}`
 }
 
-// The Meta access token is dead, so ingestion may be stale. We surface that
-// context on every run rather than pretending the numbers are live.
+// Whether to frame ingested numbers as potentially stale. The daily meta-health
+// cron sets META_TOKEN_LIVE=1 once a valid token is confirmed; a missing token
+// is treated as dead so the framing stays honest.
 function metaTokenDead(): boolean {
-  // Treat a missing token as dead too. If a working token is ever wired in,
-  // set META_TOKEN_LIVE=1 to suppress the staleness framing.
   return process.env.META_TOKEN_LIVE !== '1'
 }
 
@@ -130,7 +129,7 @@ export async function runAdsHygiene(
       key: 'stale_data',
       severity: 'high',
       title: 'Metrics data is stale',
-      detail: `${stale.length} client${stale.length === 1 ? '' : 's'} have no fresh performance data in the last 3 days. The Meta access token is dead, so ingestion may have stopped. Treat the numbers below as of their last data date, not live.`,
+      detail: `${stale.length} client${stale.length === 1 ? '' : 's'} have no fresh performance data in the last 3 days. Ingestion may have stalled (reporter down, or the ad account is no longer shared). Treat the numbers below as of their last data date, not live.`,
       affected: stale,
     })
   }
