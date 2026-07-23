@@ -1,7 +1,7 @@
 // Client-side fetch helpers for the Accounts module.
 // Mirrors the pattern in lib/tasks-client.ts.
 
-import type { Client, ClientReport, ClientIssue, ClientCommsLog, ClientMeeting, TeamQuestion, OnboardingForm, ClientCreativeAsset, Task, Profile, PendingMeetingTask } from './types'
+import type { Client, ClientReport, ClientIssue, ClientCommsLog, ClientMeeting, TeamQuestion, OnboardingForm, ClientCreativeAsset, Task, Profile, PendingMeetingTask, PendingChange } from './types'
 
 const BASE = '/api/accounts'
 
@@ -154,6 +154,43 @@ export async function rejectPendingMeetingTask(id: string): Promise<void> {
     const { error } = await res.json().catch(() => ({ error: 'Unknown error' }))
     throw new Error(error)
   }
+}
+
+// ─── Pending changes (issue / health / weekly-focus proposals) ────────────────
+
+export async function fetchPendingChanges(): Promise<PendingChange[]> {
+  const res = await fetch('/api/pending-changes?status=pending', { cache: 'no-store' })
+  if (!res.ok) throw new Error('Failed to load pending changes')
+  const json = await res.json()
+  return json.changes
+}
+
+export async function approvePendingChange(id: string): Promise<PendingChange> {
+  const res = await fetch(`/api/pending-changes/${id}/approve`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  })
+  if (!res.ok) {
+    const { error } = await res.json().catch(() => ({ error: 'Unknown error' }))
+    throw new Error(error)
+  }
+  const json = await res.json()
+  return json.change
+}
+
+export async function rejectPendingChange(id: string, rejectionNote?: string): Promise<PendingChange> {
+  const res = await fetch(`/api/pending-changes/${id}/reject`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ rejection_note: rejectionNote }),
+  })
+  if (!res.ok) {
+    const { error } = await res.json().catch(() => ({ error: 'Unknown error' }))
+    throw new Error(error)
+  }
+  const json = await res.json()
+  return json.change
 }
 
 // ─── Comms ────────────────────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Loader2, Circle, ArrowLeft, MessageSquare, Lightbulb, AlertTriangle, FileText, Calendar, Save, X } from 'lucide-react'
+import { Loader2, Circle, ArrowLeft, MessageSquare, Lightbulb, AlertTriangle, FileText, Calendar, Save, X, Target } from 'lucide-react'
 import Link from 'next/link'
 import { fetchAccount, updateAccount } from '@/lib/accounts-client'
 import { useTaskMeta, useCurrentUserId } from '@/lib/tasks-client'
@@ -135,6 +135,17 @@ export default function AccountHQ({ accountId }: { accountId: string }) {
           )}
         </div>
       </div>
+
+      {/* Focus this week (set from an approved weekly_focus proposal) */}
+      {account.weekly_focus && (
+        <div className="flex items-start gap-2 mb-5 rounded-xl border border-[#1c2035] bg-[#0e1017] px-4 py-3">
+          <Target size={13} className="text-emerald-400 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-[9px] font-bold tracking-widest uppercase text-[#636780]">Focus this week</p>
+            <p className="text-[#e4e6f0] text-sm mt-0.5 leading-snug">{account.weekly_focus}</p>
+          </div>
+        </div>
+      )}
 
       {/* Stat strip */}
       <div className="grid grid-cols-4 gap-3 mb-5">

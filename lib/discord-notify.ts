@@ -183,6 +183,34 @@ export function notifyReportReady(report: NotifyReport, client: NotifyClient): v
   void post(ACCOUNTS_WEBHOOK_URL, 'New report pending approval.', [embed])
 }
 
+// Fired by /api/pending-changes/inbound after the meeting agent stages
+// non-task proposals (issues / health / weekly-focus) from a call transcript.
+// One summary per client so Seb knows there are profile changes to review.
+export function notifyPendingChanges(
+  client: NotifyClient,
+  counts: { task: number; issue: number; health: number; weekly_focus: number },
+): void {
+  const total = counts.issue + counts.health + counts.weekly_focus
+  if (total === 0) return
+  const parts: string[] = []
+  if (counts.issue) parts.push(`${counts.issue} issue${counts.issue === 1 ? '' : 's'}`)
+  if (counts.health) parts.push('a health change')
+  if (counts.weekly_focus) parts.push('a weekly focus')
+  const embed: Embed = {
+    title: `${total} profile change${total === 1 ? '' : 's'} to review: ${client.name}`,
+    url: `${OS_URL}/accounts/approvals`,
+    color: counts.issue > 0 ? 0xF59E0B : 0x10B981,
+    description: `Pulled from the latest call transcript. Approve or reject on the Approvals page.`,
+    fields: [
+      { name: 'Client', value: client.name, inline: true },
+      { name: 'Staged', value: parts.join(', '), inline: true },
+    ],
+    footer: { text: 'August OS Accounts' },
+    timestamp: new Date().toISOString(),
+  }
+  void post(ACCOUNTS_WEBHOOK_URL, `New meeting proposals pending for ${client.name}.`, [embed])
+}
+
 export function notifyClientFlag(client: NotifyClient, flags: string[]): void {
   const embed: Embed = {
     title: `Early warning: ${client.name}`,

@@ -43,6 +43,7 @@ export type Client = {
   call_day: number | null
   call_time: string | null
   health: 'green' | 'amber' | 'red'
+  weekly_focus: string | null
   last_client_contact: string | null
   notes: string | null
   created_at: string
@@ -134,6 +135,30 @@ export type PendingMeetingTask = {
   status: PendingMeetingTaskStatus
   created_at: string
   reviewed_at: string | null
+}
+
+// pending_changes (migration 053): non-task proposals the meeting agent stages
+// for approval -- client issues, a health read, a weekly-focus note. Sibling to
+// PendingMeetingTask (which covers tasks).
+export type PendingChangeKind = 'issue' | 'health' | 'weekly_focus'
+export type PendingChangeStatus = 'pending' | 'approved' | 'rejected'
+
+export type PendingChange = {
+  id: string
+  client_id: string | null
+  meeting_id: string | null
+  source: string
+  kind: PendingChangeKind
+  payload: Record<string, unknown>
+  summary: string | null
+  quote: string | null
+  status: PendingChangeStatus
+  applied_ref: string | null
+  approved_by: string | null
+  approved_at: string | null
+  rejection_note: string | null
+  created_at: string
+  clients?: Pick<Client, 'id' | 'name' | 'health'>
 }
 
 export type ClientCommDirection = 'inbound' | 'outbound'

@@ -1,9 +1,29 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Loader2, CheckCircle, XCircle, Edit3, ChevronDown, ChevronUp } from 'lucide-react'
-import { fetchPendingReports, approveReport, rejectReport, fetchPendingMeetingTasks, approvePendingMeetingTask, rejectPendingMeetingTask } from '@/lib/accounts-client'
-import type { ClientReport, Client, PendingMeetingTask } from '@/lib/types'
+import { Loader2, CheckCircle, XCircle, Edit3, ChevronDown, ChevronUp, AlertTriangle, Activity, Target } from 'lucide-react'
+import { fetchPendingReports, approveReport, rejectReport, fetchPendingMeetingTasks, approvePendingMeetingTask, rejectPendingMeetingTask, fetchPendingChanges, approvePendingChange, rejectPendingChange } from '@/lib/accounts-client'
+import type { ClientReport, Client, PendingMeetingTask, PendingChange, PendingChangeKind } from '@/lib/types'
+
+const CHANGE_META: Record<PendingChangeKind, { label: string; colour: string; Icon: typeof AlertTriangle }> = {
+  issue:        { label: 'Issue',        colour: 'text-amber-400',   Icon: AlertTriangle },
+  health:       { label: 'Health',       colour: 'text-red-400',     Icon: Activity },
+  weekly_focus: { label: 'Weekly focus', colour: 'text-emerald-400', Icon: Target },
+}
+
+const CHANGE_SEVERITY_COLOUR: Record<string, string> = {
+  trust_threatening: 'text-red-400', major: 'text-orange-400', minor: 'text-amber-400',
+}
+
+function describeChange(change: PendingChange): string {
+  const p = change.payload ?? {}
+  switch (change.kind) {
+    case 'issue':        return String(p.description ?? change.summary ?? 'Issue')
+    case 'health':       return `Set health ${String(p.from ?? '?')} → ${String(p.to ?? '?')}`
+    case 'weekly_focus': return String(p.text ?? change.summary ?? 'Weekly focus')
+    default:             return change.summary ?? change.kind
+  }
+}
 
 type ReportWithClient = ClientReport & { clients: Pick<Client, 'id' | 'name' | 'health'> }
 
@@ -34,6 +54,13 @@ export default function ApprovalsQueue() {
   const [tasksError, setTasksError] = useState<string | null>(null)
   const [taskBusy, setTaskBusy] = useState<Record<string, boolean>>({})
 
+  const [changes, setChanges] = useState<PendingChange[]>([])
+  const [changesLoading, setChangesLoading] = useState(true)
+  const [changesError, setChangesError] = useState<string | null>(null)
+  const [changeBusy, setChangeBusy] = useState<Record<string, boolean>>({})
+  const [changeRejecting, setChangeRejecting] = useState<Record<string, boolean>>({})
+  const [changeNotes, setChangeNotes] = useState<Record<string, string>>({})
+
   const load = useCallback(() => {
     fetchPendingReports()
       .then(setReports)
@@ -48,8 +75,40 @@ export default function ApprovalsQueue() {
       .finally(() => setTasksLoading(false))
   }, [])
 
+  const loadChanges = useCallback(() => {
+    fetchPendingChanges()
+      .then(setChanges)
+      .catch((e: Error) => setChangesError(e.message))
+      .finally(() => setChangesLoading(false))
+  }, [])
+
   useEffect(() => { load() }, [load])
   useEffect(() => { loadTasks() }, [loadTasks])
+  useEffect(() => { loadChanges() }, [loadChanges])
+
+  async function handleApproveChange(change: PendingChange) {
+    setChangeBusy((b) => ({ ...b, [change.id]: true }))
+    try {
+      await approvePendingChange(change.id)
+      setChanges((cs) => cs.filter((c) => c.id !== change.id))
+    } catch (e: unknown) {
+      alert((e as Error).message)
+    } finally {
+      setChangeBusy((b) => ({ ...b, [change.id]: false }))
+    }
+  }
+
+  async function handleRejectChange(change: PendingChange) {
+    setChangeBusy((b) => ({ ...b, [change.id]: true }))
+    try {
+      await rejectPendingChange(change.id, changeNotes[change.id])
+      setChanges((cs) => cs.filter((c) => c.id !== change.id))
+    } catch (e: unknown) {
+      alert((e as Error).message)
+    } finally {
+      setChangeBusy((b) => ({ ...b, [change.id]: false }))
+    }
+  }
 
   async function handleApproveTask(task: PendingMeetingTask) {
     setTaskBusy((b) => ({ ...b, [task.id]: true }))
@@ -180,6 +239,113 @@ export default function ApprovalsQueue() {
                       {isBusy ? <Loader2 size={11} className="animate-spin" /> : <XCircle size={11} />}
                       Reject
                     </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Client profile changes pending approval (issues / health / weekly focus) */}
+      <div className="mb-8">
+        <div className="mb-3">
+          <h2 className="text-[#e4e6f0] font-semibold text-sm">Client updates pending approval</h2>
+          <p className="text-[#636780] text-xs mt-0.5">
+            Issues, health reads, and weekly focus the meeting agent pulled from a transcript. Nothing changes the client profile until you approve it here.
+          </p>
+        </div>
+
+        {changesError && <p className="text-red-400 text-sm mb-3">{changesError}</p>}
+
+        {changesLoading ? (
+          <div className="flex items-center justify-center h-16">
+            <Loader2 className="animate-spin text-[#636780]" size={16} />
+          </div>
+        ) : changes.length === 0 ? (
+          <div className="text-center text-[#636780] text-sm py-8 rounded-xl border border-[#1c2035] bg-[#0e1017]">
+            No client updates waiting on you.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {changes.map((change) => {
+              const meta = CHANGE_META[change.kind]
+              const isBusy = changeBusy[change.id] ?? false
+              const isRejecting = changeRejecting[change.id] ?? false
+              const severity = change.kind === 'issue' ? String(change.payload?.severity ?? '') : ''
+              return (
+                <div key={change.id} className="rounded-xl border border-[#1c2035] bg-[#0e1017] p-4">
+                  <div className="flex items-start gap-3">
+                    <meta.Icon size={15} className={`${meta.colour} mt-0.5 shrink-0`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`text-[9px] font-bold tracking-widest uppercase ${meta.colour}`}>{meta.label}</span>
+                        {change.clients?.name && (
+                          <span className="text-[10px] text-[#636780]">{change.clients.name}</span>
+                        )}
+                        {severity && (
+                          <span className={`text-[9px] font-bold uppercase ${CHANGE_SEVERITY_COLOUR[severity] ?? 'text-[#636780]'}`}>
+                            {severity.replace('_', ' ')}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[#e4e6f0] text-sm mt-1 leading-snug">{describeChange(change)}</p>
+                      {change.kind === 'health' && change.payload?.reason ? (
+                        <p className="text-[#8b8fa8] text-xs mt-1">{String(change.payload.reason)}</p>
+                      ) : null}
+                      {change.quote ? (
+                        <p className="text-[#636780] text-xs mt-1.5 italic border-l-2 border-[#1c2035] pl-2">
+                          &ldquo;{change.quote}&rdquo;
+                        </p>
+                      ) : null}
+
+                      {isRejecting && (
+                        <textarea
+                          className="w-full mt-2 bg-[#181b27] border border-red-900 rounded-lg p-2 text-xs text-[#e4e6f0] resize-none focus:outline-none focus:border-red-500"
+                          rows={2}
+                          value={changeNotes[change.id] ?? ''}
+                          onChange={(e) => setChangeNotes((n) => ({ ...n, [change.id]: e.target.value }))}
+                          placeholder="Optional note on why this was rejected."
+                        />
+                      )}
+
+                      <div className="flex items-center gap-2 mt-2.5">
+                        <button
+                          disabled={isBusy}
+                          onClick={() => handleApproveChange(change)}
+                          className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs bg-emerald-700 hover:bg-emerald-600 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        >
+                          {isBusy ? <Loader2 size={11} className="animate-spin" /> : <CheckCircle size={11} />}
+                          Approve
+                        </button>
+                        {!isRejecting ? (
+                          <button
+                            disabled={isBusy}
+                            onClick={() => setChangeRejecting((r) => ({ ...r, [change.id]: true }))}
+                            className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs bg-[#181b27] hover:bg-[#1c2035] text-[#636780] hover:text-red-400 border border-[#1c2035] transition-colors disabled:opacity-40"
+                          >
+                            <XCircle size={11} /> Reject
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              disabled={isBusy}
+                              onClick={() => handleRejectChange(change)}
+                              className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs bg-red-800 hover:bg-red-700 text-white disabled:opacity-40 transition-colors"
+                            >
+                              {isBusy ? <Loader2 size={11} className="animate-spin" /> : <XCircle size={11} />}
+                              Confirm reject
+                            </button>
+                            <button
+                              onClick={() => setChangeRejecting((r) => ({ ...r, [change.id]: false }))}
+                              className="text-xs text-[#636780] hover:text-[#e4e6f0]"
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
               )
