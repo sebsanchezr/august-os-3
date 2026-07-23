@@ -28,7 +28,7 @@ export async function middleware(request: NextRequest) {
 
   const path = request.nextUrl.pathname
   // Agent-authenticated endpoints use x-agent-key and must bypass Supabase auth
-  const isAgentEndpoint = path.startsWith('/api/tasks/inbound') || path.startsWith('/api/pending-tasks/inbound')
+  const isAgentEndpoint = path.startsWith('/api/tasks/inbound') || path.startsWith('/api/pending-tasks/inbound') || path.startsWith('/api/pending-changes/inbound')
   // Third-party webhooks (Cal.com, Stripe, SignWell) and the tokenized
   // client onboarding portal have no Supabase session and verify themselves
   // (HMAC signature / portal token), so they must bypass auth here.
