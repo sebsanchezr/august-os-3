@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdmin } from '@/lib/supabase-server'
 
+// Never cache: the accounts list must include clients added since the last deploy.
+export const dynamic = 'force-dynamic'
+
 const VALID_STATUSES = ['active', 'paused', 'churned'] as const
 const VALID_SERVICES = ['paid_ads', 'creatives'] as const
 const VALID_CALL_DAYS = [1, 2, 3, 4, 5] as const

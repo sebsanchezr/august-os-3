@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseAdmin } from '@/lib/supabase-server'
 
+// Never cache: dropdown lists must reflect clients added since the last deploy.
+export const dynamic = 'force-dynamic'
+
 // GET /api/tasks/meta
 // Returns profiles and clients for dropdowns in the task UI
 export async function GET() {
