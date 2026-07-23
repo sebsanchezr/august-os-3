@@ -773,8 +773,8 @@ export function notifyMetaHealth(opts: {
     url: `${OS_URL}/accounts`,
     color: critical ? 0xEF4444 : 0xF59E0B,
     description: critical
-      ? `The Meta access token is not usable: ${tokenDetail}. Server-side ad ingestion is down until it is reconnected. Generate a fresh System User token in Business Settings and update META_ACCESS_TOKEN in Vercel.`
-      : `The Meta access token is valid but expiring soon${expiringInDays !== null ? ` (${expiringInDays}d)` : ''}. Rotate it before it lapses: generate a fresh System User token in Business Settings and update META_ACCESS_TOKEN in Vercel.${unsharedAccounts.length ? ' Accounts not visible to this token are listed below for reference.' : ''}`,
+      ? `Meta token problem: ${tokenDetail}. Server-side ad ingestion is degraded until it is reconnected. Reconnect the token and update its value in Vercel.`
+      : `Meta token expiring soon${expiringInDays !== null ? ` (${expiringInDays}d)` : ''}: ${tokenDetail}. Reconnect it before it lapses and update its value in Vercel, or the ads workspace loses fresh data.${unsharedAccounts.length ? ' Accounts not visible to this token are listed below for reference.' : ''}`,
     fields,
     footer: { text: 'August OS · Meta health' },
     timestamp: new Date().toISOString(),

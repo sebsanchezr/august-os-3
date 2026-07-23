@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdmin } from '@/lib/supabase-server'
-import { isMetaConfigured, fetchAccountInsights } from '@/lib/meta'
+import { metaTokenCandidates, fetchAccountInsightsAnyToken } from '@/lib/meta'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -35,8 +35,8 @@ async function handle(req: NextRequest) {
     }
   }
 
-  if (!isMetaConfigured()) {
-    return NextResponse.json({ skipped: true, reason: 'META_ACCESS_TOKEN not configured' })
+  if (metaTokenCandidates().length === 0) {
+    return NextResponse.json({ skipped: true, reason: 'No Meta access token configured' })
   }
 
   const supabase = createSupabaseAdmin()
@@ -60,7 +60,7 @@ async function handle(req: NextRequest) {
   for (const client of clients ?? []) {
     if (!client.meta_ad_account_id) continue
 
-    const insights = await fetchAccountInsights(client.meta_ad_account_id, since, until)
+    const insights = await fetchAccountInsightsAnyToken(client.meta_ad_account_id, since, until)
     if (!insights.ok) {
       errors.push({ client_id: client.id, name: client.name, error: insights.error })
       continue
@@ -101,7 +101,7 @@ async function handle(req: NextRequest) {
 
   const agencyAccountId = process.env.AGENCY_META_AD_ACCOUNT_ID
   if (agencyAccountId) {
-    const agencyInsights = await fetchAccountInsights(agencyAccountId, since, until)
+    const agencyInsights = await fetchAccountInsightsAnyToken(agencyAccountId, since, until)
     if (!agencyInsights.ok) {
       agency = { synced: false, error: agencyInsights.error }
     } else {

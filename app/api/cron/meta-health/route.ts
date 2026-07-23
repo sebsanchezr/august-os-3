@@ -1,23 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseAdmin } from '@/lib/supabase-server'
-import { checkMetaTokenHealth, listAccessibleAdAccountIds } from '@/lib/meta'
+import { checkMetaTokenHealth } from '@/lib/meta'
 import { notifyMetaHealth } from '@/lib/discord-notify'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
 // GET/POST /api/cron/meta-health
-// Runs daily (see vercel.json). Verifies the Meta connection is healthy so a
-// silent break is caught before it starves the ads workspace of data:
-//   1. Is the access token still valid / not near expiry?
-//   2. Are all connected client ad accounts actually shared with our system
-//      user? An unshared account is the silent cause of "connected but no data",
-//      because server-side ingestion returns a permission error, not rows.
-// Only pings the pulse Discord channel when a human is actually needed
-// (token down, token expiring soon, or accounts need sharing). Meta system-user
-// tokens do not auto-refresh and a serverless cron cannot rewrite Vercel env,
-// so reconnection is a human step; this cron makes sure that step never gets
-// missed rather than pretending it can self-heal a revoked token.
+// Runs daily (see vercel.json). Verifies every Meta access token the OS relies
+// on is still valid and not about to expire, so a silent break is caught before
+// it starves the ads workspace of data. Pings the pulse Discord channel only
+// when a human is actually needed: a token is invalid, or expiring within a
+// week. The client user-token (META_CLIENT_ACCESS_TOKEN) is the one that
+// actually expires, so this is what stops the 15 Aug lapse going unnoticed.
+//
+// Meta user tokens do not auto-refresh and a serverless cron cannot rewrite
+// Vercel env, so reconnection is a human step; this cron guarantees the alert
+// lands rather than pretending it can self-heal a revoked token.
 export async function POST(req: NextRequest) {
   return handle(req)
 }
@@ -28,6 +26,11 @@ export async function GET(req: NextRequest) {
 
 const EXPIRY_WARN_DAYS = 7
 
+const TOKENS: { label: string; env: string }[] = [
+  { label: 'client (reads client ad accounts)', env: 'META_CLIENT_ACCESS_TOKEN' },
+  { label: 'system user (house account)', env: 'META_ACCESS_TOKEN' },
+]
+
 async function handle(req: NextRequest) {
   const cronSecret = process.env.CRON_SECRET
   if (cronSecret) {
@@ -37,68 +40,40 @@ async function handle(req: NextRequest) {
     }
   }
 
-  const health = await checkMetaTokenHealth()
+  const report: Array<{ label: string; configured: boolean; valid: boolean; type: string | null; days_until_expiry: number | null; error: string | null; alerted: boolean }> = []
 
-  // Token down: nothing else can be checked. Alert and stop.
-  if (!health.valid) {
-    notifyMetaHealth({
-      tokenOk: false,
-      tokenDetail: health.error ?? 'unknown reason',
-      expiringInDays: null,
-      unsharedAccounts: [],
-    })
-    return NextResponse.json({ token_ok: false, error: health.error, alerted: true })
-  }
+  for (const t of TOKENS) {
+    const token = process.env[t.env]
+    if (!token) {
+      report.push({ label: t.label, configured: false, valid: false, type: null, days_until_expiry: null, error: 'not configured', alerted: false })
+      continue
+    }
 
-  const supabase = createSupabaseAdmin()
+    const health = await checkMetaTokenHealth(token)
+    const expiringSoon = health.valid && health.daysUntilExpiry !== null && health.daysUntilExpiry <= EXPIRY_WARN_DAYS
+    const needsAlert = !health.valid || expiringSoon
 
-  // Connected, active clients whose accounts should be pullable server-side.
-  const { data: clients } = await supabase
-    .from('clients')
-    .select('name, meta_ad_account_id')
-    .eq('status', 'active')
-    .is('archived_at', null)
-    .not('meta_ad_account_id', 'is', null)
+    if (needsAlert) {
+      notifyMetaHealth({
+        tokenOk: health.valid,
+        tokenDetail: health.valid
+          ? `${t.label} — ${health.type ?? 'token'} valid, expiring in ${health.daysUntilExpiry}d`
+          : `${t.label} — ${health.error ?? 'invalid'}`,
+        expiringInDays: expiringSoon ? health.daysUntilExpiry : null,
+        unsharedAccounts: [],
+      })
+    }
 
-  const connected = (clients ?? []).filter((c) => c.meta_ad_account_id)
-
-  // Which of those accounts can the token actually read?
-  const accessible = await listAccessibleAdAccountIds()
-  let unshared: { name: string; account_id: string }[] = []
-  let accessibleError: string | null = null
-  if (accessible.ok) {
-    unshared = connected
-      .filter((c) => !accessible.data.has(String(c.meta_ad_account_id).replace(/^act_/, '')))
-      .map((c) => ({ name: c.name, account_id: String(c.meta_ad_account_id) }))
-  } else {
-    accessibleError = accessible.error
-  }
-
-  // Alert only on the genuine "connection is breaking" signal: the token is
-  // expiring soon. We deliberately do NOT alert merely because client accounts
-  // are unshared with this token: ingestion runs through the external reporter
-  // (which holds its own access), and an actual data stall is already caught by
-  // the metrics-staleness cron. The unshared list is still returned below for
-  // debugging so it is visible without generating daily false alarms.
-  const expiringSoon = health.daysUntilExpiry !== null && health.daysUntilExpiry <= EXPIRY_WARN_DAYS
-
-  if (expiringSoon) {
-    notifyMetaHealth({
-      tokenOk: true,
-      tokenDetail: `${health.type ?? 'token'} valid but expiring`,
-      expiringInDays: health.daysUntilExpiry,
-      unsharedAccounts: unshared,
+    report.push({
+      label: t.label,
+      configured: true,
+      valid: health.valid,
+      type: health.type,
+      days_until_expiry: health.daysUntilExpiry,
+      error: health.error,
+      alerted: needsAlert,
     })
   }
 
-  return NextResponse.json({
-    token_ok: true,
-    token_type: health.type,
-    expires_in_days: health.daysUntilExpiry,
-    scopes: health.scopes,
-    connected_accounts: connected.length,
-    unshared_accounts: unshared,
-    accessible_check_error: accessibleError,
-    alerted: expiringSoon,
-  })
+  return NextResponse.json({ tokens: report, alerted: report.some((r) => r.alerted) })
 }

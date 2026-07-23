@@ -109,8 +109,8 @@ function num(v: string | undefined): number {
   return Number.isFinite(n) ? n : 0
 }
 
-async function callGraph(path: string, params: Record<string, string>): Promise<MetaResult<MetaInsightRow[]>> {
-  const token = process.env.META_ACCESS_TOKEN
+async function callGraph(path: string, params: Record<string, string>, tokenOverride?: string): Promise<MetaResult<MetaInsightRow[]>> {
+  const token = tokenOverride || process.env.META_ACCESS_TOKEN
   if (!token) return { ok: false, error: 'META_ACCESS_TOKEN is not configured' }
 
   const search = new URLSearchParams({ ...params, access_token: token })
@@ -151,12 +151,12 @@ export type MetaTokenHealth = {
   error: string | null
 }
 
-export async function checkMetaTokenHealth(): Promise<MetaTokenHealth> {
-  const token = process.env.META_ACCESS_TOKEN
+export async function checkMetaTokenHealth(tokenOverride?: string): Promise<MetaTokenHealth> {
+  const token = tokenOverride || process.env.META_ACCESS_TOKEN
   const base: MetaTokenHealth = {
     valid: false, type: null, appId: null, scopes: [], expiresAt: 0, daysUntilExpiry: null, error: null,
   }
-  if (!token) return { ...base, error: 'META_ACCESS_TOKEN is not configured' }
+  if (!token) return { ...base, error: 'Meta access token is not configured' }
 
   let res: Response
   try {
@@ -238,15 +238,47 @@ export async function fetchAccountInsights(
   accountId: string,
   sinceYYYYMMDD: string,
   untilYYYYMMDD: string,
+  tokenOverride?: string,
 ): Promise<MetaResult<MetaDailyInsight[]>> {
   const res = await callGraph(`/${withActPrefix(accountId)}/insights`, {
     time_range: JSON.stringify({ since: sinceYYYYMMDD, until: untilYYYYMMDD }),
     time_increment: '1',
     fields: 'spend,impressions,clicks,ctr,actions,action_values,purchase_roas',
-  })
+  }, tokenOverride)
 
   if (!res.ok) return res
   return { ok: true, data: res.data.map(rowToDailyInsight) }
+}
+
+// Access tokens the OS can try, in priority order. The client user-token
+// (META_CLIENT_ACCESS_TOKEN) can read the actual client ad accounts; the
+// system-user token (META_ACCESS_TOKEN) only reaches the house account.
+// De-duplicated, empties dropped.
+export function metaTokenCandidates(): string[] {
+  const raw = [process.env.META_CLIENT_ACCESS_TOKEN, process.env.META_ACCESS_TOKEN]
+  return Array.from(new Set(raw.filter((t): t is string => Boolean(t && t.trim()))))
+}
+
+// Tries each candidate token until one can actually read the account (Meta
+// returns #200 for tokens without ads_read on that account). Returns the daily
+// insights from the first token that succeeds, so a single account owned by any
+// of our connected apps gets ingested without per-account token config.
+export async function fetchAccountInsightsAnyToken(
+  accountId: string,
+  sinceYYYYMMDD: string,
+  untilYYYYMMDD: string,
+): Promise<MetaResult<MetaDailyInsight[]>> {
+  const tokens = metaTokenCandidates()
+  if (tokens.length === 0) return { ok: false, error: 'No Meta access token configured' }
+  let lastError = 'No token could read this account'
+  for (const token of tokens) {
+    const res = await fetchAccountInsights(accountId, sinceYYYYMMDD, untilYYYYMMDD, token)
+    if (res.ok) return res
+    lastError = res.error
+    // Only keep trying on a permission error; a real API/network fault stops here.
+    if (!/#200|permission/i.test(res.error)) return res
+  }
+  return { ok: false, error: lastError }
 }
 
 // Campaign-level breakdown (aggregated over the window, no daily split) for
