@@ -10,6 +10,7 @@ import ReportView from './report-view'
 import ReportHistory from './report-history'
 import PastMeetings from './past-meetings'
 import AssetsTab from './assets-tab'
+import AdsPanel from './ads-panel'
 import HistoryTimeline from './history-timeline'
 import type { Client, ClientIssue, ClientReport, ClientMeeting, ClientMetricsDaily } from '@/lib/types'
 
@@ -53,7 +54,7 @@ type AccountData = {
   }>
 }
 
-type TabId = 'overview' | 'assets' | 'report' | 'meetings' | 'timeline' | 'reports' | 'settings'
+type TabId = 'overview' | 'ads' | 'assets' | 'report' | 'meetings' | 'timeline' | 'reports' | 'settings'
 
 export default function AccountHQ({ accountId }: { accountId: string }) {
   const [data, setData] = useState<AccountData | null>(null)
@@ -157,6 +158,7 @@ export default function AccountHQ({ accountId }: { accountId: string }) {
       <div className="flex items-center gap-1 border-b border-[#1c2035] mb-5">
         {([
           ['overview', 'Overview'],
+          ['ads', 'Paid Ads'],
           ['assets', 'Assets'],
           ['report', 'Weekly Report'],
           ['meetings', 'Past Meetings'],
@@ -177,6 +179,11 @@ export default function AccountHQ({ accountId }: { accountId: string }) {
           </button>
         ))}
       </div>
+
+      {/* Paid Ads tab: full media-buyer workspace scoped to this client */}
+      {tab === 'ads' && (
+        <AdsPanel accountId={accountId} connected={Boolean(account.meta_ad_account_id)} />
+      )}
 
       {/* Weekly report tab: sleek rendered metrics */}
       {tab === 'report' && (

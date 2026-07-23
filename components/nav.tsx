@@ -51,14 +51,6 @@ const NAV: NavCategory[] = [
         ],
       },
       {
-        id: 'paid-ads',
-        label: 'Paid Ads',
-        icon: TrendingUp,
-        items: [
-          { label: 'Client Ads', href: '/ads' },
-        ],
-      },
-      {
         id: 'creatives',
         label: 'Creatives',
         icon: Palette,
