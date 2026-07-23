@@ -105,7 +105,6 @@ export default function OsGuideSopPage() {
             <SubHeading>Account managers / fulfilment</SubHeading>
             <NumberedList items={[
               '/fulfilment is your home page: Your Tasks, overdue counts, meetings this week, onboardings in flight, clients at risk.',
-              '/accounts/comms next. This is the SLA inbox. Every unanswered inbound client message has a live countdown: WhatsApp within 2 hours, email within 24 hours. Clear anything close to breach first.',
               'Check /accounts/issues for open issues on your clients.',
             ]} />
           </div>
@@ -200,7 +199,7 @@ export default function OsGuideSopPage() {
             </p>
             <CheckList items={[
               'Logging an inbound comm starts a response clock: WhatsApp 2h, email 24h.',
-              'Logging an outbound comm clears the oldest open clock for that client automatically. You can also click Responded in /accounts/comms.',
+              'Logging an outbound comm clears the oldest open clock for that client automatically.',
               'Warning trigger words in a summary fire an early-warning Discord alert. That is intended, do not soften the summary to avoid it.',
               'Client HQ tabs: Overview, Assets, Weekly Report, Past Meetings, History, Settings (targets, ROAS goal, Meta ad account ID, reporting cadence).',
             ]} />

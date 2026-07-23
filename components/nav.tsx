@@ -72,7 +72,6 @@ const NAV: NavCategory[] = [
         icon: Briefcase,
         items: [
           { label: 'Clients',   href: '/accounts'           },
-          { label: 'Comms',     href: '/accounts/comms'     },
           { label: 'Approvals', href: '/accounts/approvals' },
           { label: 'Issues',    href: '/accounts/issues'    },
         ],
