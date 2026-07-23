@@ -785,6 +785,22 @@ export function notifyMetaHealth(opts: {
   void post(PULSE_WEBHOOK_URL, content, [embed])
 }
 
+// One-time positive nudge: a connected client ad account that the OS could not
+// read server-side has just become readable (access was granted), so its
+// metrics now sync via the free daily cron instead of only the Mac reporter.
+export function notifyMetaAccountLive(accounts: { name: string; account_id: string }[]): void {
+  if (!accounts.length) return
+  const embed: Embed = {
+    title: `Server-side ad sync now live (${accounts.length})`,
+    url: `${OS_URL}/accounts`,
+    color: 0x22C55E,
+    description: `These client ad accounts are now readable by the OS token, so their metrics sync automatically each morning (05:45 UTC) without depending on the Mac reporter:\n\n${fmtField(accounts.map((a) => `- ${a.name} (${a.account_id})`).join('\n'))}`,
+    footer: { text: 'August OS · Meta health' },
+    timestamp: new Date().toISOString(),
+  }
+  void post(PULSE_WEBHOOK_URL, `✅ ${accounts.length} client ad account(s) now syncing server-side.`, [embed])
+}
+
 // Daily staleness check: metrics ingestion is pushed by the external Mac
 // reporter, so this warns when a client's numbers have gone stale (>24h) and
 // the OS is showing old data.
