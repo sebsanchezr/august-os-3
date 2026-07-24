@@ -7,7 +7,7 @@ import {
   LayoutDashboard, ClipboardList, KanbanSquare, BookOpen, LogOut, Zap,
   Home, FileText, Inbox, Users, MessageSquare, TrendingUp,
   CheckSquare, Archive, ChevronDown, Briefcase, AlertTriangle, CalendarDays, PhoneCall,
-  Rocket, Globe, Sparkles, Palette,
+  Rocket, Globe, Sparkles, Palette, PoundSterling,
 } from 'lucide-react'
 import { getSupabaseBrowser } from '@/lib/supabase-browser'
 import { useEffect, useState } from 'react'
@@ -154,6 +154,19 @@ const NAV: NavCategory[] = [
         icon: Globe,
         items: [
           { label: 'Opportunities', href: '/upwork' },
+        ],
+      },
+    ],
+  },
+  {
+    label: 'Agency',
+    sections: [
+      {
+        id: 'finance',
+        label: 'Finance',
+        icon: PoundSterling,
+        items: [
+          { label: 'P&L', href: '/finance' },
         ],
       },
     ],
