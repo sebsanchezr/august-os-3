@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useRouter } from 'next/navigation'
 import {
-  LayoutDashboard, ClipboardList, KanbanSquare, BookOpen, LogOut, Zap,
+  ClipboardList, KanbanSquare, BookOpen, LogOut, Zap,
   Home, FileText, Inbox, Users, MessageSquare, TrendingUp,
   CheckSquare, Archive, ChevronDown, Briefcase, AlertTriangle, CalendarDays, PhoneCall,
   Rocket, Globe, Sparkles, Palette, PoundSterling,
@@ -24,14 +24,6 @@ const NAV: NavCategory[] = [
     label: 'Fulfilment',
     sections: [
       {
-        id: 'fulfilment-dashboard',
-        label: 'Overview',
-        icon: LayoutDashboard,
-        items: [
-          { label: 'Dashboard', href: '/fulfilment' },
-        ],
-      },
-      {
         id: 'tasks',
         label: 'Tasks',
         icon: KanbanSquare,
@@ -39,15 +31,6 @@ const NAV: NavCategory[] = [
           { label: 'Board',   href: '/tasks'         },
           { label: 'List',    href: '/tasks/list'    },
           { label: 'Archive', href: '/tasks/archive' },
-        ],
-      },
-      {
-        id: 'meetings',
-        label: 'Meetings',
-        icon: CalendarDays,
-        items: [
-          { label: 'Upcoming', href: '/meetings'      },
-          { label: 'Past',     href: '/meetings/past' },
         ],
       },
       {
@@ -59,14 +42,6 @@ const NAV: NavCategory[] = [
         ],
       },
       {
-        id: 'onboarding',
-        label: 'Onboarding',
-        icon: Rocket,
-        items: [
-          { label: 'Pipeline', href: '/onboarding' },
-        ],
-      },
-      {
         id: 'accounts',
         label: 'Accounts',
         icon: Briefcase,
@@ -74,6 +49,28 @@ const NAV: NavCategory[] = [
           { label: 'Clients',   href: '/accounts'           },
           { label: 'Approvals', href: '/accounts/approvals' },
           { label: 'Issues',    href: '/accounts/issues'    },
+        ],
+      },
+    ],
+  },
+  {
+    label: 'In-House',
+    sections: [
+      {
+        id: 'meetings',
+        label: 'Meetings',
+        icon: CalendarDays,
+        items: [
+          { label: 'Upcoming', href: '/meetings'      },
+          { label: 'Past',     href: '/meetings/past' },
+        ],
+      },
+      {
+        id: 'onboarding',
+        label: 'Onboarding',
+        icon: Rocket,
+        items: [
+          { label: 'Pipeline', href: '/onboarding' },
         ],
       },
     ],
