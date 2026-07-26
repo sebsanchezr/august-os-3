@@ -3,12 +3,21 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Loader2, Plus, Trash2, X, MapPin } from 'lucide-react'
-import { fetchTeamMembers, deleteTeamMember, createTeamMember, type TeamMember, type TeamMemberRole, type TeamMemberStatus } from '@/lib/team-client'
+import { fetchTeamMembers, deleteTeamMember, createTeamMember, type TeamMember, type TeamMemberRole, type TeamMemberStatus, type TeamMemberTeam } from '@/lib/team-client'
 
 const ROLE_LABEL: Record<TeamMemberRole, string> = {
   cold_caller: 'Cold Caller',
   sales_manager: 'Sales Manager',
   other: 'Other',
+}
+
+// Department grouping for the Team page. Order here is the display order.
+const TEAM_ORDER: TeamMemberTeam[] = ['c_suite', 'fulfilment', 'sales', 'ai_agents']
+const TEAM_LABEL: Record<TeamMemberTeam, string> = {
+  c_suite: 'C-Suite',
+  fulfilment: 'Fulfilment',
+  sales: 'Sales',
+  ai_agents: 'AI Agents',
 }
 
 const STATUS_BADGE: Record<TeamMemberStatus, string> = {
@@ -116,80 +125,40 @@ export default function TeamGrid() {
         </div>
       </div>
 
-      {/* Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {members.map((member) => (
-          <Link
-            key={member.id}
-            href={`/team/${member.id}`}
-            className="group relative block min-w-0 rounded-xl border border-[#1c2035] bg-[#0e1017] p-4 transition-all hover:border-[#3d4060]"
-          >
-            <div className="flex items-start justify-between gap-2 mb-3">
-              <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                {member.avatar_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={member.avatar_url} alt={member.name} className="h-9 w-9 rounded-full object-cover shrink-0" />
-                ) : (
-                  <span className={`h-9 w-9 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 ${avatarColour(member.name)}`}>
-                    {initials(member.name)}
-                  </span>
-                )}
-                <div className="min-w-0">
-                  <p className="text-[#e4e6f0] font-medium text-sm truncate">{member.name}</p>
-                  {member.title && <p className="text-[#636780] text-xs mt-0.5 truncate">{member.title}</p>}
-                </div>
-              </div>
-              {confirmingId === member.id ? (
-                <span className="flex items-center gap-1 shrink-0">
-                  <button
-                    type="button"
-                    disabled={deletingId === member.id}
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(member.id) }}
-                    className="rounded px-1.5 py-0.5 text-[10px] bg-red-600 hover:bg-red-500 text-white transition-colors disabled:opacity-50"
-                  >
-                    {deletingId === member.id ? '...' : 'Delete'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmingId(null) }}
-                    className="rounded px-1.5 py-0.5 text-[10px] bg-[#181b27] hover:bg-[#1c2035] text-[#636780] border border-[#1c2035] transition-colors"
-                  >
-                    No
-                  </button>
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  aria-label="Delete member"
-                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmingId(member.id) }}
-                  className="text-[#3d4060] hover:text-red-400 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity shrink-0"
-                >
-                  <Trash2 size={13} />
-                </button>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2 flex-wrap mb-3">
-              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-[#181b27] text-[#a9adc4] border border-[#1c2035]">
-                {ROLE_LABEL[member.role]}
-              </span>
-              <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${STATUS_BADGE[member.status]}`}>
-                {member.status}
-              </span>
-            </div>
-
-            {member.location && (
-              <div className="flex items-center gap-1 text-[10px] text-[#636780] pt-2 border-t border-[#1c2035]">
-                <MapPin size={9} /> {member.location}
-              </div>
-            )}
-          </Link>
-        ))}
-      </div>
-
-      {members.length === 0 && (
+      {/* Grouped by team */}
+      {members.length === 0 ? (
         <div className="text-center text-[#636780] text-sm py-16">
           No team members yet.
+        </div>
+      ) : (
+        <div className="space-y-8">
+          {TEAM_ORDER.map((team) => {
+            const group = members.filter((m) => m.team === team)
+            if (group.length === 0) return null
+            return (
+              <div key={team}>
+                <div className="flex items-center gap-2 mb-3">
+                  <h2 className="text-[11px] font-semibold tracking-[0.13em] text-[#8b8fa8] uppercase">
+                    {TEAM_LABEL[team]}
+                  </h2>
+                  <span className="text-[10px] text-[#636780]">{group.length}</span>
+                  <div className="flex-1 border-t border-[#1c2035]" />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {group.map((member) => (
+                    <MemberCard
+                      key={member.id}
+                      member={member}
+                      confirmingId={confirmingId}
+                      deletingId={deletingId}
+                      onConfirm={setConfirmingId}
+                      onDelete={handleDelete}
+                    />
+                  ))}
+                </div>
+              </div>
+            )
+          })}
         </div>
       )}
 
@@ -206,12 +175,96 @@ export default function TeamGrid() {
   )
 }
 
+// ─── Member card ────────────────────────────────────────────────────────────
+
+function MemberCard({
+  member,
+  confirmingId,
+  deletingId,
+  onConfirm,
+  onDelete,
+}: {
+  member: TeamMember
+  confirmingId: string | null
+  deletingId: string | null
+  onConfirm: (id: string | null) => void
+  onDelete: (id: string) => void
+}) {
+  return (
+    <Link
+      href={`/team/${member.id}`}
+      className="group relative block min-w-0 rounded-xl border border-[#1c2035] bg-[#0e1017] p-4 transition-all hover:border-[#3d4060]"
+    >
+      <div className="flex items-start justify-between gap-2 mb-3">
+        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+          {member.avatar_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={member.avatar_url} alt={member.name} className="h-9 w-9 rounded-full object-cover shrink-0" />
+          ) : (
+            <span className={`h-9 w-9 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 ${avatarColour(member.name)}`}>
+              {initials(member.name)}
+            </span>
+          )}
+          <div className="min-w-0">
+            <p className="text-[#e4e6f0] font-medium text-sm truncate">{member.name}</p>
+            {member.title && <p className="text-[#636780] text-xs mt-0.5 truncate">{member.title}</p>}
+          </div>
+        </div>
+        {confirmingId === member.id ? (
+          <span className="flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              disabled={deletingId === member.id}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete(member.id) }}
+              className="rounded px-1.5 py-0.5 text-[10px] bg-red-600 hover:bg-red-500 text-white transition-colors disabled:opacity-50"
+            >
+              {deletingId === member.id ? '...' : 'Delete'}
+            </button>
+            <button
+              type="button"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onConfirm(null) }}
+              className="rounded px-1.5 py-0.5 text-[10px] bg-[#181b27] hover:bg-[#1c2035] text-[#636780] border border-[#1c2035] transition-colors"
+            >
+              No
+            </button>
+          </span>
+        ) : (
+          <button
+            type="button"
+            aria-label="Delete member"
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onConfirm(member.id) }}
+            className="text-[#3d4060] hover:text-red-400 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity shrink-0"
+          >
+            <Trash2 size={13} />
+          </button>
+        )}
+      </div>
+
+      <div className="flex items-center gap-2 flex-wrap mb-3">
+        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-[#181b27] text-[#a9adc4] border border-[#1c2035]">
+          {ROLE_LABEL[member.role]}
+        </span>
+        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${STATUS_BADGE[member.status]}`}>
+          {member.status}
+        </span>
+      </div>
+
+      {member.location && (
+        <div className="flex items-center gap-1 text-[10px] text-[#636780] pt-2 border-t border-[#1c2035]">
+          <MapPin size={9} /> {member.location}
+        </div>
+      )}
+    </Link>
+  )
+}
+
 // ─── New member modal ───────────────────────────────────────────────────────
 
 function NewMemberModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const [name, setName] = useState('')
   const [title, setTitle] = useState('')
   const [role, setRole] = useState<TeamMemberRole>('cold_caller')
+  const [team, setTeam] = useState<TeamMemberTeam>('fulfilment')
   const [status, setStatus] = useState<TeamMemberStatus>('onboarding')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -237,6 +290,7 @@ function NewMemberModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
         name: name.trim(),
         title: title.trim() || null,
         role,
+        team,
         status,
       })
       onSaved()
@@ -282,6 +336,16 @@ function NewMemberModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. Cold Caller"
             />
+          </div>
+
+          <div>
+            <label className={labelCls}>Team</label>
+            <select className={inputCls} value={team} onChange={(e) => setTeam(e.target.value as TeamMemberTeam)}>
+              <option value="c_suite">C-Suite</option>
+              <option value="fulfilment">Fulfilment</option>
+              <option value="sales">Sales</option>
+              <option value="ai_agents">AI Agents</option>
+            </select>
           </div>
 
           <div className="grid grid-cols-2 gap-3">

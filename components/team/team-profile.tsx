@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Loader2, ArrowLeft, Save, ExternalLink } from 'lucide-react'
-import { fetchTeamMember, updateTeamMember, type TeamMember, type TeamMemberRole, type TeamMemberStatus, type StaffOnboarding, type StaffOnboardingTask } from '@/lib/team-client'
+import { fetchTeamMember, updateTeamMember, type TeamMember, type TeamMemberRole, type TeamMemberStatus, type TeamMemberTeam, type StaffOnboarding, type StaffOnboardingTask } from '@/lib/team-client'
 import { ONBOARDING_STAGE_LABELS } from '@/lib/team-server'
 
 const INPUT = 'w-full bg-[#181b27] border border-[#1c2035] rounded-lg px-3 py-2 text-xs text-[#e4e6f0] focus:outline-none focus:border-indigo-500 transition-colors placeholder:text-[#3d4060]'
@@ -109,6 +109,7 @@ function TeamMemberForm({ member, onSaved }: { member: TeamMember; onSaved: (pat
     name:              member.name,
     title:             member.title ?? '',
     role:              member.role,
+    team:              member.team,
     status:            member.status,
     email:             member.email ?? '',
     phone:             member.phone ?? '',
@@ -139,6 +140,7 @@ function TeamMemberForm({ member, onSaved }: { member: TeamMember; onSaved: (pat
         name:              form.name,
         title:             form.title || null,
         role:              form.role as TeamMemberRole,
+        team:              form.team as TeamMemberTeam,
         status:            form.status as TeamMemberStatus,
         email:             form.email || null,
         phone:             form.phone || null,
@@ -171,6 +173,14 @@ function TeamMemberForm({ member, onSaved }: { member: TeamMember; onSaved: (pat
               <option value="cold_caller">Cold Caller</option>
               <option value="sales_manager">Sales Manager</option>
               <option value="other">Other</option>
+            </select>
+          </Field>
+          <Field label="Team">
+            <select className={INPUT} {...field('team')}>
+              <option value="c_suite">C-Suite</option>
+              <option value="fulfilment">Fulfilment</option>
+              <option value="sales">Sales</option>
+              <option value="ai_agents">AI Agents</option>
             </select>
           </Field>
           <Field label="Status">

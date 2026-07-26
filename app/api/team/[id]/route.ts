@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic'
 
 const VALID_ROLES = ['cold_caller', 'sales_manager', 'other'] as const
 const VALID_STATUSES = ['onboarding', 'active', 'paused', 'offboarded'] as const
+const VALID_TEAMS = ['c_suite', 'fulfilment', 'sales', 'ai_agents'] as const
 
 // GET /api/team/[id] -- member + its onboarding (if any) + checklist tasks
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
@@ -55,9 +56,12 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (body.status != null && !(VALID_STATUSES as readonly string[]).includes(body.status as string)) {
     return NextResponse.json({ error: `status must be one of: ${VALID_STATUSES.join(', ')}` }, { status: 400 })
   }
+  if (body.team != null && !(VALID_TEAMS as readonly string[]).includes(body.team as string)) {
+    return NextResponse.json({ error: `team must be one of: ${VALID_TEAMS.join(', ')}` }, { status: 400 })
+  }
 
   const allowed = [
-    'name', 'title', 'role', 'email', 'phone', 'whatsapp', 'location',
+    'name', 'title', 'role', 'team', 'email', 'phone', 'whatsapp', 'location',
     'avatar_url', 'login_email', 'discord_user_id', 'status', 'start_date',
     'commission_notes',
   ]

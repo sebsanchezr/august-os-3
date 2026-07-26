@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic'
 
 const VALID_ROLES = ['cold_caller', 'sales_manager', 'other'] as const
 const VALID_STATUSES = ['onboarding', 'active', 'paused', 'offboarded'] as const
+const VALID_TEAMS = ['c_suite', 'fulfilment', 'sales', 'ai_agents'] as const
 
 // GET /api/team
 // Returns all team members, most recently created first.
@@ -41,12 +42,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `status must be one of: ${VALID_STATUSES.join(', ')}` }, { status: 400 })
   }
 
+  const team = (body.team as string) || 'fulfilment'
+  if (!(VALID_TEAMS as readonly string[]).includes(team)) {
+    return NextResponse.json({ error: `team must be one of: ${VALID_TEAMS.join(', ')}` }, { status: 400 })
+  }
+
   const { data: member, error } = await supabase
     .from('team_members')
     .insert({
       name:              (body.name as string).trim(),
       title:             body.title ?? null,
       role,
+      team,
       email:             body.email ?? null,
       phone:             body.phone ?? null,
       whatsapp:          body.whatsapp ?? null,

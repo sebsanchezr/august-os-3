@@ -9,12 +9,14 @@ const BASE = '/api/team'
 
 export type TeamMemberRole = 'cold_caller' | 'sales_manager' | 'other'
 export type TeamMemberStatus = 'onboarding' | 'active' | 'paused' | 'offboarded'
+export type TeamMemberTeam = 'c_suite' | 'fulfilment' | 'sales' | 'ai_agents'
 
 export type TeamMember = {
   id: string
   name: string
   title: string | null
   role: TeamMemberRole
+  team: TeamMemberTeam
   email: string | null
   phone: string | null
   whatsapp: string | null
