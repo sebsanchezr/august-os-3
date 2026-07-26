@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdmin } from '@/lib/supabase-server'
 import { logUpdate } from '@/lib/updates'
+import { generateChangelog } from '@/lib/changelog-server'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -195,10 +196,23 @@ async function handle(req: NextRequest) {
   const update = (await logUpdate(title, description, 'Digest'))
     ?? (await logUpdate(title, description, 'New'))
 
+  // Also run the commit changelog here. Its own cron (changelog) never fires on
+  // the current plan's cron cap, so folding it into this daily-running digest is
+  // what actually keeps /updates fed from GitHub commits. Never let a changelog
+  // failure break the digest response.
+  let changelog: unknown = null
+  try {
+    changelog = await generateChangelog()
+  } catch (e) {
+    console.error('[daily-digest] changelog', e)
+    changelog = { error: e instanceof Error ? e.message : 'changelog failed' }
+  }
+
   return NextResponse.json({
     logged: Boolean(update),
     title,
     description,
+    changelog,
     errors: errors.length ? errors : undefined,
   })
 }
