@@ -229,7 +229,7 @@ function CollapsibleSection({
             <Link
               key={href}
               href={href}
-              className={`flex items-center gap-2.5 pl-[26px] pr-3 py-2 rounded-lg text-sm transition-colors ${
+              className={`flex items-center gap-2.5 pl-[26px] pr-3 py-2 rounded-lg text-xs transition-colors ${
                 itemIsActive(href, pathname)
                   ? 'bg-[#181b27] text-[#e4e6f0] font-medium'
                   : 'text-[#636780] hover:text-[#e4e6f0] hover:bg-[#181b27]'
