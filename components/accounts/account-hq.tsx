@@ -10,6 +10,7 @@ import ReportView from './report-view'
 import ReportHistory from './report-history'
 import PastMeetings from './past-meetings'
 import AssetsTab from './assets-tab'
+import CreativesTab from './creatives-tab'
 import AdsPanel from './ads-panel'
 import HistoryTimeline from './history-timeline'
 import type { Client, ClientIssue, ClientReport, ClientMeeting, ClientMetricsDaily } from '@/lib/types'
@@ -54,7 +55,7 @@ type AccountData = {
   }>
 }
 
-type TabId = 'overview' | 'ads' | 'assets' | 'report' | 'meetings' | 'timeline' | 'reports' | 'settings'
+type TabId = 'overview' | 'ads' | 'creatives' | 'assets' | 'report' | 'meetings' | 'timeline' | 'reports' | 'settings'
 
 export default function AccountHQ({ accountId }: { accountId: string }) {
   const [data, setData] = useState<AccountData | null>(null)
@@ -170,6 +171,7 @@ export default function AccountHQ({ accountId }: { accountId: string }) {
         {([
           ['overview', 'Overview'],
           ['ads', 'Paid Ads'],
+          ['creatives', 'Creatives'],
           ['assets', 'Assets'],
           ['report', 'Weekly Report'],
           ['meetings', 'Past Meetings'],
@@ -340,6 +342,10 @@ export default function AccountHQ({ accountId }: { accountId: string }) {
       )}
 
       {/* Assets tab */}
+      {tab === 'creatives' && (
+        <CreativesTab clientId={accountId} clientName={account.name} metaConnected={Boolean(account.meta_ad_account_id)} />
+      )}
+
       {tab === 'assets' && (
         <AssetsTab clientId={accountId} />
       )}
