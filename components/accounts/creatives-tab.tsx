@@ -1,7 +1,16 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Loader2, UploadCloud, X, Sparkles, ExternalLink, FileText, Image as ImageIcon } from 'lucide-react'
+import { Loader2, UploadCloud, X, Sparkles, ExternalLink, FileText, Image as ImageIcon, TrendingUp, Lightbulb } from 'lucide-react'
+
+type Suggestion = {
+  id: string
+  title: string
+  angle: string | null
+  format: string | null
+  rationale: string | null
+  evidence: Record<string, unknown> | null
+}
 
 type CreativeRequest = {
   id: string
@@ -47,6 +56,7 @@ export default function CreativesTab({
   const [flash, setFlash] = useState<{ ok: boolean; msg: string } | null>(null)
   const [requests, setRequests] = useState<CreativeRequest[]>([])
   const [loadingHistory, setLoadingHistory] = useState(true)
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
 
   const loadHistory = useCallback(() => {
@@ -58,6 +68,23 @@ export default function CreativesTab({
   }, [clientId])
 
   useEffect(() => { loadHistory() }, [loadHistory])
+
+  useEffect(() => {
+    fetch(`/api/creatives/suggestions?client_id=${clientId}`)
+      .then((r) => r.json())
+      .then((d) => setSuggestions(d.suggestions ?? []))
+      .catch(() => setSuggestions([]))
+  }, [clientId])
+
+  const useSuggestion = (s: Suggestion) => {
+    setTitle(s.title)
+    if (s.format === 'video' || s.format === 'static') setFormat(s.format)
+    setContext((prev) => {
+      const line = `Suggested direction: ${s.title}${s.angle ? ` (${s.angle})` : ''}. ${s.rationale ?? ''}`.trim()
+      return prev ? `${prev}\n${line}` : line
+    })
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 
   const addFiles = (list: FileList | null) => {
     if (!list) return
@@ -103,6 +130,36 @@ export default function CreativesTab({
 
   return (
     <div className="space-y-6">
+      {/* ── Winning-creative suggestions (data-grounded) ──────────── */}
+      {suggestions.length > 0 && (
+        <div className="rounded-xl border border-emerald-900/40 bg-emerald-950/20 p-4">
+          <div className="flex items-center gap-2 mb-1">
+            <TrendingUp size={14} className="text-emerald-400" />
+            <h3 className="text-xs font-semibold text-emerald-300">Suggested winning creatives</h3>
+            <span className="text-[10px] text-[#636780]">grounded in what&apos;s working</span>
+          </div>
+          <p className="text-[10px] text-[#636780] mb-3">Based on this account&apos;s top ROAS ads and the longest-running competitor ads. Click one to prefill a batch.</p>
+          <div className="grid grid-cols-2 gap-2">
+            {suggestions.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => useSuggestion(s)}
+                className="text-left rounded-lg border border-[#1c2035] bg-[#181b27] hover:border-emerald-700/60 p-3 transition-colors group"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[#e4e6f0]">
+                    <Lightbulb size={12} className="text-amber-300" /> {s.title}
+                  </span>
+                  {s.format && <span className="text-[9px] uppercase tracking-wide text-[#636780] bg-[#0f1220] px-1.5 py-0.5 rounded">{s.format}</span>}
+                </div>
+                {s.rationale && <p className="text-[10px] text-[#8b90ad] mt-1.5 line-clamp-3">{s.rationale}</p>}
+                <span className="text-[10px] text-emerald-400 mt-1.5 inline-block opacity-0 group-hover:opacity-100 transition-opacity">Use this →</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ── Create batch ─────────────────────────────────────────── */}
       <div className="rounded-xl border border-[#1c2035] bg-[#181b27] p-5">
         <div className="flex items-center gap-2 mb-1">
