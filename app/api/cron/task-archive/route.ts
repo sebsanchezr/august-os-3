@@ -5,13 +5,19 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
 // GET/POST /api/cron/task-archive
-// Runs daily (see vercel.json). Archives tasks that finished more than 7 days
+// Runs daily (see vercel.json). Archives tasks that finished more than 5 days
 // ago so the active board/list stay focused on live work. "Finished" means a
 // terminal status (ops 'completed' or creative 'live') with a completed_at
-// older than the 7-day cutoff. Archiving is a soft move (sets archived_at);
+// older than the cutoff. Archiving is a soft move (sets archived_at);
 // nothing is deleted and everything is restorable from the Archive view.
 // Idempotent: already-archived and soft-deleted rows are excluded.
-const ARCHIVE_AFTER_DAYS = 7
+//
+// Window was 7 days, cut to 5 on 27 Jul 2026 so the board carries less finished
+// work. Note this only ever sees the terminal statuses in the current
+// TaskStatus enum. Rows left in a legacy status ('done', 'this_week',
+// 'backlog') are invisible to it and linger forever, which is what migration
+// 059_task_status_backfill.sql cleaned up.
+const ARCHIVE_AFTER_DAYS = 5
 
 export async function POST(req: NextRequest) {
   return handle(req)
