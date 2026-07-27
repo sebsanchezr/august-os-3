@@ -24,7 +24,7 @@ export type Profile = {
 export type Client = {
   id: string
   name: string
-  status: 'active' | 'paused' | 'churned'
+  status: 'active' | 'paused' | 'churned' | 'onboarding'
   services: string[]
   // Account Management fields (migration 006)
   contact_name: string | null

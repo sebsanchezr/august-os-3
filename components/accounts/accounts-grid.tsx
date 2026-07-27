@@ -80,14 +80,130 @@ export default function AccountsGrid() {
     refreshAccounts()
   }, [])
 
+  const activeAccounts = accounts.filter((a) => a.status === 'active')
+  const pausedAccounts = accounts.filter((a) => a.status === 'paused')
+  const onboardingAccounts = accounts.filter((a) => a.status === 'onboarding')
+
   const displayed = healthFilter === 'all'
-    ? accounts
-    : accounts.filter((a) => a.health === healthFilter)
+    ? activeAccounts
+    : activeAccounts.filter((a) => a.health === healthFilter)
 
   const counts = {
-    red:   accounts.filter((a) => a.health === 'red').length,
-    amber: accounts.filter((a) => a.health === 'amber').length,
-    green: accounts.filter((a) => a.health === 'green').length,
+    red:   activeAccounts.filter((a) => a.health === 'red').length,
+    amber: activeAccounts.filter((a) => a.health === 'amber').length,
+    green: activeAccounts.filter((a) => a.health === 'green').length,
+  }
+
+  function renderCard(account: AccountListItem, compact: boolean) {
+    return (
+      <Link
+        key={account.id}
+        href={`/accounts/${account.id}`}
+        className={`group relative block min-w-0 rounded-xl border transition-all hover:border-[#3d4060] ${compact ? 'p-3' : 'p-4'} ${HEALTH_BG[account.health] ?? HEALTH_BG.green}`}
+      >
+        {/* Name + health */}
+        <div className={`flex items-start justify-between gap-2 ${compact ? 'mb-1' : 'mb-3'}`}>
+          <div className="min-w-0 flex-1">
+            <p className={`text-[#e4e6f0] font-medium truncate ${compact ? 'text-[13px]' : 'text-sm'}`}>{account.name}</p>
+            {account.am && (
+              <p className="text-[#636780] text-xs mt-0.5 flex items-center gap-1 min-w-0">
+                <Users size={10} className="shrink-0" />
+                <span className="truncate">{(account.am as { name: string }).name}</span>
+              </p>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0 mt-1">
+            {confirmingId === account.id ? (
+              <span className="flex items-center gap-1">
+                <button
+                  type="button"
+                  disabled={deletingId === account.id}
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(account.id) }}
+                  className="rounded px-1.5 py-0.5 text-[10px] bg-red-600 hover:bg-red-500 text-white transition-colors disabled:opacity-50"
+                >
+                  {deletingId === account.id ? '...' : 'Delete'}
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmingId(null) }}
+                  className="rounded px-1.5 py-0.5 text-[10px] bg-[#181b27] hover:bg-[#1c2035] text-[#636780] border border-[#1c2035] transition-colors"
+                >
+                  No
+                </button>
+              </span>
+            ) : (
+              <button
+                type="button"
+                aria-label="Delete client"
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmingId(account.id) }}
+                className="text-[#3d4060] hover:text-red-400 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+              >
+                <Trash2 size={13} />
+              </button>
+            )}
+            <Circle
+              size={compact ? 8 : 10}
+              className={`fill-current ${HEALTH_COLOUR[account.health] ?? HEALTH_COLOUR.green}`}
+            />
+          </div>
+        </div>
+
+        {/* 7d metrics: big cards only */}
+        {!compact && (
+          !account.meta_ad_account_id ? (
+            <div className="grid grid-cols-3 gap-2 mb-3">
+              <Metric label="Spend 7d" value="Not connected" muted />
+              <Metric label="Revenue 7d" value="Not connected" muted />
+              <Metric label="ROAS 7d" value="Not connected" muted />
+            </div>
+          ) : !account.metrics_7d ? (
+            <div className="grid grid-cols-3 gap-2 mb-3">
+              <Metric label="Spend 7d" value="No data yet" muted />
+              <Metric label="Revenue 7d" value="No data yet" muted />
+              <Metric label="ROAS 7d" value="No data yet" muted />
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-2 mb-3">
+              <Metric label="Spend 7d" value={fmt(account.metrics_7d.spend, account.currency)} />
+              <Metric label="Revenue 7d" value={fmt(account.metrics_7d.revenue, account.currency)} />
+              <Metric
+                label="ROAS 7d"
+                value={account.metrics_7d.roas_avg != null ? `${account.metrics_7d.roas_avg.toFixed(2)}x` : '--'}
+                highlight={
+                  account.target_roas != null && account.metrics_7d.roas_avg != null
+                    ? account.metrics_7d.roas_avg < account.target_roas * 0.7
+                      ? 'red'
+                      : account.metrics_7d.roas_avg < account.target_roas * 0.95
+                      ? 'amber'
+                      : 'green'
+                    : undefined
+                }
+              />
+            </div>
+          )
+        )}
+
+        {/* Footer: contact recency, tasks, meeting */}
+        <div className={`flex items-center justify-between text-[10px] text-[#636780] ${compact ? 'pt-2 mt-1' : 'pt-2'} border-t border-[#1c2035]`}>
+          <span>Contact {relativeDate(account.last_client_contact)}</span>
+          <span className="flex items-center gap-2">
+            {account.open_task_count > 0 && (
+              <span className="flex items-center gap-0.5">
+                <TrendingUp size={9} /> {account.open_task_count}t
+              </span>
+            )}
+            {account.open_issue_count > 0 && (
+              <span className="flex items-center gap-0.5 text-amber-400">
+                <AlertTriangle size={9} /> {account.open_issue_count}i
+              </span>
+            )}
+            <span className="flex items-center gap-0.5">
+              <Calendar size={9} /> {nextMeetingLabel(account.next_meeting)}
+            </span>
+          </span>
+        </div>
+      </Link>
+    )
   }
 
   if (loading) {
@@ -112,7 +228,7 @@ export default function AccountsGrid() {
       <div className="flex items-center justify-between mb-5">
         <div>
           <h1 className="text-[#e4e6f0] font-semibold text-lg">Accounts</h1>
-          <p className="text-[#636780] text-xs mt-0.5">{accounts.length} active clients</p>
+          <p className="text-[#636780] text-xs mt-0.5">{activeAccounts.length} active{pausedAccounts.length > 0 ? ` · ${pausedAccounts.length} paused` : ''}{onboardingAccounts.length > 0 ? ` · ${onboardingAccounts.length} onboarding` : ''}</p>
         </div>
         <div className="flex items-center gap-2">
           <Link
@@ -167,120 +283,40 @@ export default function AccountsGrid() {
         })}
       </div>
 
-      {/* Grid */}
+      {/* Active clients — full cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {displayed.map((account) => (
-          <Link
-            key={account.id}
-            href={`/accounts/${account.id}`}
-            className={`group relative block min-w-0 rounded-xl border p-4 transition-all hover:border-[#3d4060] ${HEALTH_BG[account.health] ?? HEALTH_BG.green}`}
-          >
-            {/* Name + health */}
-            <div className="flex items-start justify-between gap-2 mb-3">
-              <div className="min-w-0 flex-1">
-                <p className="text-[#e4e6f0] font-medium text-sm truncate">{account.name}</p>
-                {account.am && (
-                  <p className="text-[#636780] text-xs mt-0.5 flex items-center gap-1 min-w-0">
-                    <Users size={10} className="shrink-0" />
-                    <span className="truncate">{(account.am as { name: string }).name}</span>
-                  </p>
-                )}
-              </div>
-              <div className="flex items-center gap-1.5 shrink-0 mt-1">
-                {confirmingId === account.id ? (
-                  <span className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      disabled={deletingId === account.id}
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(account.id) }}
-                      className="rounded px-1.5 py-0.5 text-[10px] bg-red-600 hover:bg-red-500 text-white transition-colors disabled:opacity-50"
-                    >
-                      {deletingId === account.id ? '...' : 'Delete'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmingId(null) }}
-                      className="rounded px-1.5 py-0.5 text-[10px] bg-[#181b27] hover:bg-[#1c2035] text-[#636780] border border-[#1c2035] transition-colors"
-                    >
-                      No
-                    </button>
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    aria-label="Delete client"
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmingId(account.id) }}
-                    className="text-[#3d4060] hover:text-red-400 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                )}
-                <Circle
-                  size={10}
-                  className={`fill-current ${HEALTH_COLOUR[account.health] ?? HEALTH_COLOUR.green}`}
-                />
-              </div>
-            </div>
-
-            {/* 7d metrics: always render, uniform across all clients */}
-            {!account.meta_ad_account_id ? (
-              <div className="grid grid-cols-3 gap-2 mb-3">
-                <Metric label="Spend 7d" value="Not connected" muted />
-                <Metric label="Revenue 7d" value="Not connected" muted />
-                <Metric label="ROAS 7d" value="Not connected" muted />
-              </div>
-            ) : !account.metrics_7d ? (
-              <div className="grid grid-cols-3 gap-2 mb-3">
-                <Metric label="Spend 7d" value="No data yet" muted />
-                <Metric label="Revenue 7d" value="No data yet" muted />
-                <Metric label="ROAS 7d" value="No data yet" muted />
-              </div>
-            ) : (
-              <div className="grid grid-cols-3 gap-2 mb-3">
-                <Metric label="Spend 7d" value={fmt(account.metrics_7d.spend, account.currency)} />
-                <Metric label="Revenue 7d" value={fmt(account.metrics_7d.revenue, account.currency)} />
-                <Metric
-                  label="ROAS 7d"
-                  value={account.metrics_7d.roas_avg != null ? `${account.metrics_7d.roas_avg.toFixed(2)}x` : '--'}
-                  highlight={
-                    account.target_roas != null && account.metrics_7d.roas_avg != null
-                      ? account.metrics_7d.roas_avg < account.target_roas * 0.7
-                        ? 'red'
-                        : account.metrics_7d.roas_avg < account.target_roas * 0.95
-                        ? 'amber'
-                        : 'green'
-                      : undefined
-                  }
-                />
-              </div>
-            )}
-
-            {/* Footer: contact recency, tasks, meeting */}
-            <div className="flex items-center justify-between text-[10px] text-[#636780] pt-2 border-t border-[#1c2035]">
-              <span>Contact {relativeDate(account.last_client_contact)}</span>
-              <span className="flex items-center gap-2">
-                {account.open_task_count > 0 && (
-                  <span className="flex items-center gap-0.5">
-                    <TrendingUp size={9} /> {account.open_task_count}t
-                  </span>
-                )}
-                {account.open_issue_count > 0 && (
-                  <span className="flex items-center gap-0.5 text-amber-400">
-                    <AlertTriangle size={9} /> {account.open_issue_count}i
-                  </span>
-                )}
-                <span className="flex items-center gap-0.5">
-                  <Calendar size={9} /> {nextMeetingLabel(account.next_meeting)}
-                </span>
-              </span>
-            </div>
-          </Link>
-        ))}
+        {displayed.map((account) => renderCard(account, false))}
       </div>
 
       {displayed.length === 0 && (
         <div className="text-center text-[#636780] text-sm py-16">
-          No {healthFilter !== 'all' ? healthFilter + ' ' : ''}accounts found.
+          No {healthFilter !== 'all' ? healthFilter + ' ' : ''}active accounts found.
+        </div>
+      )}
+
+      {/* Paused clients — compact cards */}
+      {pausedAccounts.length > 0 && (
+        <div className="mt-10">
+          <div className="flex items-center gap-2 mb-3">
+            <h2 className="text-[#e4e6f0] font-medium text-sm">Paused</h2>
+            <span className="text-[#636780] text-xs">{pausedAccounts.length}</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+            {pausedAccounts.map((account) => renderCard(account, true))}
+          </div>
+        </div>
+      )}
+
+      {/* Onboarding — not clients yet, compact cards */}
+      {onboardingAccounts.length > 0 && (
+        <div className="mt-10">
+          <div className="flex items-center gap-2 mb-3">
+            <h2 className="text-[#e4e6f0] font-medium text-sm">Onboarding</h2>
+            <span className="text-[#636780] text-xs">{onboardingAccounts.length}</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+            {onboardingAccounts.map((account) => renderCard(account, true))}
+          </div>
         </div>
       )}
 
@@ -426,6 +462,7 @@ function NewClientModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
               onChange={(e) => setStatus(e.target.value as Client['status'])}
             >
               <option value="active">Active</option>
+              <option value="onboarding">Onboarding</option>
               <option value="paused">Paused</option>
               <option value="churned">Churned</option>
             </select>
