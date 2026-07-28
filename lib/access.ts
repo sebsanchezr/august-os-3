@@ -12,8 +12,9 @@ export const FULFILMENT_ONLY = ['juandagato@gmail.com', 'reachalvincases@gmail.c
 // '/team' is open to every login so all staff can see the team directory.
 const ALWAYS_ALLOWED_PREFIXES = ['/overview', '/updates', '/team']
 
-// Cold Calling section of the Acquisition category.
-const COLD_CALLER_PREFIXES = ['/dashboard', '/eod', '/resources', '/websites']
+// Cold Calling section of the Acquisition category. Callers also get the SOP
+// library (their master SOP + objection playbook live under /sop).
+const COLD_CALLER_PREFIXES = ['/dashboard', '/eod', '/resources', '/websites', '/sop']
 
 // All Fulfilment routes.
 const FULFILMENT_PREFIXES = ['/fulfilment', '/tasks', '/meetings', '/onboarding', '/accounts', '/sop', '/creatives', '/ads', '/paid-ads']

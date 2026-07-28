@@ -56,7 +56,10 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { business_name, google_url, phone, city, niche, notes } = body
+    const {
+      business_name, google_url, phone, city, niche, notes,
+      owner_name, email, service_area, services, existing_site_url, requested_by_discord,
+    } = body
     let requested_by: string | null = body.requested_by || null
 
     if (!business_name || !String(business_name).trim()) {
@@ -74,6 +77,10 @@ export async function POST(req: NextRequest) {
     }
 
     const supabase = createSupabaseAdmin()
+    const cleanServices = Array.isArray(services)
+      ? services.map((s: unknown) => String(s).trim()).filter(Boolean)
+      : null
+
     const record = {
       business_name: String(business_name).trim(),
       google_url: google_url?.trim() || null,
@@ -81,6 +88,12 @@ export async function POST(req: NextRequest) {
       city: city?.trim() || null,
       niche: niche?.trim() || 'roofing',
       notes: notes?.trim() || null,
+      owner_name: owner_name?.trim() || null,
+      email: email?.trim() || null,
+      service_area: service_area?.trim() || null,
+      services: cleanServices && cleanServices.length ? cleanServices : null,
+      existing_site_url: existing_site_url?.trim() || null,
+      requested_by_discord: requested_by_discord?.trim() || null,
       requested_by,
       status: 'requested' as const,
     }

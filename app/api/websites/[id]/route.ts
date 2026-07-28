@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdmin } from '@/lib/supabase-server'
+import { notifySiteBuiltToCaller } from '@/lib/discord-notify'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,7 +30,7 @@ async function postDiscord(content: string, embeds: Embed[]): Promise<void> {
   }
 }
 
-const VALID_STATUSES = ['requested', 'approved', 'building', 'built', 'site_approved', 'sent', 'rejected'] as const
+const VALID_STATUSES = ['requested', 'approved', 'building', 'built', 'site_approved', 'sent', 'paid', 'live', 'rejected'] as const
 type Status = typeof VALID_STATUSES[number]
 
 const STATUS_COLOUR: Record<Status, number> = {
@@ -39,6 +40,8 @@ const STATUS_COLOUR: Record<Status, number> = {
   built: 0x10B981,
   site_approved: 0x10B981,
   sent: 0x22C55E,
+  paid: 0x22C55E,
+  live: 0x22C55E,
   rejected: 0xEF4444,
 }
 
@@ -49,6 +52,8 @@ const STATUS_LABEL: Record<Status, string> = {
   built: 'Built',
   site_approved: 'Site approved',
   sent: 'Sent to caller',
+  paid: 'Paid',
+  live: 'Live',
   rejected: 'Rejected',
 }
 
@@ -118,6 +123,16 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
           timestamp: new Date().toISOString(),
         }],
       )
+    }
+
+    // When the approved site is sent to the caller, @tag them in Discord with
+    // the live preview so it lands in their mentions ready for the sales call.
+    if (newStatus === 'sent') {
+      notifySiteBuiltToCaller({
+        business_name: data.business_name,
+        site_url: data.site_url,
+        requested_by_discord: data.requested_by_discord,
+      })
     }
 
     return NextResponse.json({ build: data })

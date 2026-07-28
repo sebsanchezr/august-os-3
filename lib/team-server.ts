@@ -27,10 +27,10 @@ export const DEFAULT_ONBOARDING_TASKS: DefaultOnboardingTask[] = [
   { title: 'Review Websites tab — what we sell', category: 'learning_os', url: null },
 
   // learning_video
-  { title: 'Watch: cold calling fundamentals [Juan to add link]', category: 'learning_video', url: null },
-  { title: 'Watch: openers [Juan to add link]', category: 'learning_video', url: null },
-  { title: 'Watch: objection handling [Juan to add link]', category: 'learning_video', url: null },
-  { title: 'Watch: booking/closing [Juan to add link]', category: 'learning_video', url: null },
+  { title: 'Watch: cold calling fundamentals [Sebastian Garcia to add link]', category: 'learning_video', url: null },
+  { title: 'Watch: openers [Sebastian Garcia to add link]', category: 'learning_video', url: null },
+  { title: 'Watch: objection handling [Sebastian Garcia to add link]', category: 'learning_video', url: null },
+  { title: 'Watch: booking/closing [Sebastian Garcia to add link]', category: 'learning_video', url: null },
 
   // milestone
   { title: 'Intro meeting with Sales Manager', category: 'milestone', url: null },

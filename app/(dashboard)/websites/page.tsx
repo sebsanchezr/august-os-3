@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Plus, X, ExternalLink, Check, XCircle } from 'lucide-react'
+import { Plus, X, ExternalLink, Check, XCircle, Copy } from 'lucide-react'
 import { getSupabaseBrowser } from '@/lib/supabase-browser'
+import { PAYMENT_LINKS, HOSTING_LINK, paymentLinkFor } from '@/lib/websites'
 
 interface WebsiteBuild {
   id: string
@@ -12,13 +13,21 @@ interface WebsiteBuild {
   city: string | null
   niche: string
   notes: string | null
-  status: 'requested' | 'approved' | 'building' | 'built' | 'site_approved' | 'sent' | 'rejected'
+  status: 'requested' | 'approved' | 'building' | 'built' | 'site_approved' | 'sent' | 'paid' | 'live' | 'rejected'
   site_url: string | null
   requested_by: string | null
+  owner_name: string | null
+  email: string | null
+  service_area: string | null
+  services: string[] | null
+  existing_site_url: string | null
+  sale_amount: number | null
+  paid_at: string | null
   created_at: string
 }
 
 const NICHE_OPTIONS = ['roofing', 'plumbing', 'electrical', 'landscaping', 'other']
+const SERVICE_OPTIONS = ['Pitched roofs', 'Flat roofs', 'Repairs', 'Guttering & fascias', 'Chimney work', 'Emergency callout']
 
 const STATUS_LABEL: Record<WebsiteBuild['status'], string> = {
   requested: 'Requested',
@@ -27,6 +36,8 @@ const STATUS_LABEL: Record<WebsiteBuild['status'], string> = {
   built: 'Built',
   site_approved: 'Site approved',
   sent: 'Sent to caller',
+  paid: 'Paid',
+  live: 'Live',
   rejected: 'Rejected',
 }
 
@@ -37,6 +48,8 @@ const STATUS_STYLE: Record<WebsiteBuild['status'], string> = {
   built: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
   site_approved: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
   sent: 'bg-green-500/10 text-green-400 border-green-500/20',
+  paid: 'bg-green-500/20 text-green-300 border-green-500/30',
+  live: 'bg-green-500/20 text-green-300 border-green-500/30',
   rejected: 'bg-red-500/10 text-red-400 border-red-500/20',
 }
 
@@ -50,6 +63,99 @@ function StatusBadge({ status }: { status: WebsiteBuild['status'] }) {
 
 function formatDate(d: string) {
   return new Date(d).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+}
+
+// Caller-facing picker: copy the correct Stripe Payment Link for this build.
+// Each link carries the build id as client_reference_id so the webhook matches
+// the payment back to the build and fires the hookup + newsletter automation.
+function PaymentPicker({ buildId }: { buildId: string }) {
+  const [copied, setCopied] = useState<string | null>(null)
+  const links = [
+    ...PAYMENT_LINKS.map(l => ({ key: l.tier, label: l.label, url: paymentLinkFor(l.url, buildId) })),
+    ...(HOSTING_LINK ? [{ key: 'hosting', label: '£75/mo hosting', url: paymentLinkFor(HOSTING_LINK, buildId) }] : []),
+  ]
+  const configured = links.filter(l => l.url)
+
+  async function copy(key: string, url: string) {
+    try { await navigator.clipboard.writeText(url); setCopied(key); setTimeout(() => setCopied(null), 1500) } catch { /* noop */ }
+  }
+
+  if (!configured.length) {
+    return <p className="text-[10px] text-amber-400/80 mt-2">Set the Stripe payment link envs to enable one-click send.</p>
+  }
+  return (
+    <div className="mt-2.5 flex flex-wrap gap-2">
+      {configured.map(l => (
+        <button
+          key={l.key}
+          onClick={() => copy(l.key, l.url)}
+          className="inline-flex items-center gap-1.5 bg-[#181b27] hover:bg-[#1c2035] border border-[#1c2035] text-[#e4e6f0] rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors"
+        >
+          {copied === l.key ? <Check size={12} className="text-green-400" /> : <Copy size={12} className="text-[#636780]" />}
+          {copied === l.key ? 'Copied' : l.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+interface HookupTask { id: string; title: string; done: boolean; position: number }
+
+// Post-payment checklist fulfilment works to take the site live on the real domain.
+function HookupChecklist({ buildId }: { buildId: string }) {
+  const [open, setOpen] = useState(false)
+  const [tasks, setTasks] = useState<HookupTask[]>([])
+  const [loaded, setLoaded] = useState(false)
+
+  async function load() {
+    try {
+      const res = await fetch(`/api/websites/${buildId}/hookup`)
+      const json = await res.json()
+      setTasks(json.tasks ?? [])
+      setLoaded(true)
+    } catch { /* silent */ }
+  }
+
+  async function toggle(taskId: string, done: boolean) {
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, done } : t))
+    try {
+      const res = await fetch(`/api/websites/${buildId}/hookup`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskId, done }),
+      })
+      const json = await res.json()
+      if (json.tasks) setTasks(json.tasks)
+    } catch { /* silent */ }
+  }
+
+  const doneCount = tasks.filter(t => t.done).length
+
+  return (
+    <div className="mt-2.5">
+      <button
+        onClick={() => { const next = !open; setOpen(next); if (next && !loaded) load() }}
+        className="text-xs text-[#636780] hover:text-[#e4e6f0] transition-colors"
+      >
+        {open ? 'Hide' : 'Show'} hookup checklist{loaded ? ` (${doneCount}/${tasks.length})` : ''}
+      </button>
+      {open && loaded && (
+        <div className="mt-2 space-y-1.5">
+          {tasks.map(t => (
+            <label key={t.id} className="flex items-center gap-2 text-xs text-[#e4e6f0] cursor-pointer">
+              <input
+                type="checkbox"
+                checked={t.done}
+                onChange={e => toggle(t.id, e.target.checked)}
+                className="rounded border-[#1c2035] bg-[#181b27] text-indigo-500 focus:ring-0"
+              />
+              <span className={t.done ? 'line-through text-[#636780]' : ''}>{t.title}</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default function WebsitesPage() {
@@ -66,12 +172,24 @@ export default function WebsitesPage() {
 
   const [form, setForm] = useState({
     business_name: '',
+    owner_name: '',
+    email: '',
     google_url: '',
+    existing_site_url: '',
     phone: '',
     city: '',
+    service_area: '',
     niche: 'roofing',
+    services: [] as string[],
     notes: '',
   })
+
+  function toggleService(s: string) {
+    setForm(f => ({
+      ...f,
+      services: f.services.includes(s) ? f.services.filter(x => x !== s) : [...f.services, s],
+    }))
+  }
 
   useEffect(() => {
     getSupabaseBrowser().auth.getUser().then(({ data }) => setUserEmail(data.user?.email ?? null))
@@ -100,10 +218,15 @@ export default function WebsitesPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           business_name: form.business_name,
+          owner_name: form.owner_name || null,
+          email: form.email || null,
           google_url: form.google_url || null,
+          existing_site_url: form.existing_site_url || null,
           phone: form.phone || null,
           city: form.city || null,
+          service_area: form.service_area || null,
           niche: form.niche || 'roofing',
+          services: form.services,
           notes: form.notes || null,
           requested_by: userEmail,
         }),
@@ -111,7 +234,7 @@ export default function WebsitesPage() {
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Failed')
       setShowModal(false)
-      setForm({ business_name: '', google_url: '', phone: '', city: '', niche: 'roofing', notes: '' })
+      setForm({ business_name: '', owner_name: '', email: '', google_url: '', existing_site_url: '', phone: '', city: '', service_area: '', niche: 'roofing', services: [], notes: '' })
       setCustomNiche(false)
       setBuilds(prev => [json.build, ...prev])
     } catch (err) {
@@ -197,6 +320,16 @@ export default function WebsitesPage() {
                       {b.site_url} <ExternalLink size={10} />
                     </a>
                   )}
+                  {/* On the sales call: copy the right Stripe link to send the prospect. */}
+                  {(b.status === 'sent' || b.status === 'site_approved') && <PaymentPicker buildId={b.id} />}
+                  {(b.status === 'paid' || b.status === 'live') && (
+                    <>
+                      <p className="text-xs text-green-300 mt-2 inline-flex items-center gap-1.5">
+                        <Check size={12} /> Paid{b.sale_amount ? ` (£${b.sale_amount.toLocaleString()})` : ''}. Client added to newsletter.
+                      </p>
+                      <HookupChecklist buildId={b.id} />
+                    </>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
@@ -241,7 +374,12 @@ export default function WebsitesPage() {
                   )}
                   {b.status === 'sent' && (
                     <span className="inline-flex items-center gap-1 text-xs text-green-400 px-3 py-1.5">
-                      <Check size={12} /> Done
+                      <Check size={12} /> With caller
+                    </span>
+                  )}
+                  {(b.status === 'paid' || b.status === 'live') && (
+                    <span className="inline-flex items-center gap-1 text-xs text-green-300 px-3 py-1.5">
+                      <Check size={12} /> {b.status === 'live' ? 'Live' : 'Paid'}
                     </span>
                   )}
                   {b.status === 'rejected' && (
@@ -282,8 +420,31 @@ export default function WebsitesPage() {
                 />
               </div>
 
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-[#636780] mb-1.5">Owner name</label>
+                  <input
+                    type="text"
+                    placeholder="Dave Smith"
+                    value={form.owner_name}
+                    onChange={e => setForm(f => ({ ...f, owner_name: e.target.value }))}
+                    className="w-full bg-[#181b27] border border-[#1c2035] rounded-lg px-3 py-2 text-sm text-[#e4e6f0] focus:outline-none focus:ring-1 focus:ring-indigo-500 placeholder:text-[#636780]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[#636780] mb-1.5">Email</label>
+                  <input
+                    type="email"
+                    placeholder="dave@..."
+                    value={form.email}
+                    onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                    className="w-full bg-[#181b27] border border-[#1c2035] rounded-lg px-3 py-2 text-sm text-[#e4e6f0] focus:outline-none focus:ring-1 focus:ring-indigo-500 placeholder:text-[#636780]"
+                  />
+                </div>
+              </div>
+
               <div>
-                <label className="block text-xs font-medium text-[#636780] mb-1.5">Google Business or website URL</label>
+                <label className="block text-xs font-medium text-[#636780] mb-1.5">Google Business or existing website URL</label>
                 <input
                   type="text"
                   placeholder="https://..."
@@ -351,6 +512,36 @@ export default function WebsitesPage() {
                     </button>
                   </div>
                 )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[#636780] mb-1.5">Service area <span className="text-[#3d4060]">(towns they cover)</span></label>
+                <input
+                  type="text"
+                  placeholder="Greater Manchester, Bolton, Stockport"
+                  value={form.service_area}
+                  onChange={e => setForm(f => ({ ...f, service_area: e.target.value }))}
+                  className="w-full bg-[#181b27] border border-[#1c2035] rounded-lg px-3 py-2 text-sm text-[#e4e6f0] focus:outline-none focus:ring-1 focus:ring-indigo-500 placeholder:text-[#636780]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[#636780] mb-2">Services they offer</label>
+                <div className="flex flex-wrap gap-2">
+                  {SERVICE_OPTIONS.map(s => {
+                    const on = form.services.includes(s)
+                    return (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => toggleService(s)}
+                        className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${on ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-[#181b27] border-[#1c2035] text-[#636780] hover:text-[#e4e6f0]'}`}
+                      >
+                        {s}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
 
               <div>

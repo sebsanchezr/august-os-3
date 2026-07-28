@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 // Runs daily (see vercel.json). Two reminder conditions per active onboarding:
 //   1. stage is 'intro_booked' but no intro_meeting_at is set -- nudge to book it.
 //   2. day7_review_at has passed and the candidate isn't 'active' yet -- nudge
-//      Seb + Juan to get the day-7 CEO test call on the calendar.
+//      Seb + Sebastian Garcia to get the day-7 CEO test call on the calendar.
 export async function POST(req: NextRequest) {
   return handle(req)
 }
@@ -52,7 +52,7 @@ async function handle(req: NextRequest) {
     if (o.day7_review_at && new Date(o.day7_review_at) <= now && o.stage !== 'active') {
       notifyStaffReminder(
         `Book day-7 review: ${name}`,
-        `${name}'s day-7 review window has arrived and they're still at "${o.stage.replace(/_/g, ' ')}". Seb + Juan: get the CEO test call booked.`,
+        `${name}'s day-7 review window has arrived and they're still at "${o.stage.replace(/_/g, ' ')}". Seb + Sebastian Garcia: get the CEO test call booked.`,
       )
       day7Reminders += 1
     }

@@ -729,7 +729,7 @@ export function notifyPostMeetingMessage(
 // is created (staff_onboardings.welcome_sent flips to true).
 export function notifyStaffWelcome(name: string, role: string): void {
   const roleLabel = role.replace(/_/g, ' ')
-  const welcomeCopy = `Hey ${name} 👋 Welcome to the August Marketing sales team! Buzzing to have you on the phones. Next steps: sign your contract, send your details so we get your OS login sorted, and Juan will book your intro call. This is 100% commission — the more you call, the more you earn, no cap. Let's make some money. — Team August`
+  const welcomeCopy = `Hey ${name} 👋 Welcome to the August Marketing sales team! Buzzing to have you on the phones. Next steps: sign your contract, send your details so we get your OS login sorted, and Sebastian Garcia will book your intro call. This is 100% commission — the more you call, the more you earn, no cap. Let's make some money. — Team August`
   const embed: Embed = {
     title: `New hire: ${name}`,
     url: `${OS_URL}/team/onboarding`,
@@ -768,6 +768,47 @@ export function notifyStaffReminder(title: string, body: string): void {
     timestamp: new Date().toISOString(),
   }
   void post(TEAM_WEBHOOK_URL, title, [embed])
+}
+
+// ─── Website cold-call sale loop ────────────────────────────────────────────
+
+const WEBDEV_WEBHOOK_URL = process.env.DISCORD_WEBDEV_WEBHOOK_URL || WEBHOOK_URL
+
+// Fired when a requested site finishes building and is approved to send to the
+// caller. Tags the caller's Discord id so it lands in their DMs/mentions with
+// the live preview URL, ready to present on the sales call.
+export function notifySiteBuiltToCaller(
+  build: { business_name: string; site_url: string | null; requested_by_discord?: string | null },
+): void {
+  const embed: Embed = {
+    title: `Site ready to sell: ${build.business_name}`,
+    url: build.site_url || `${OS_URL}/websites`,
+    color: 0x22C55E,
+    description: build.site_url
+      ? `Preview is live. Present it on your next call, then send the payment link.\n\n${build.site_url}`
+      : 'Preview is ready in the Websites tab.',
+    footer: { text: 'August OS Websites' },
+    timestamp: new Date().toISOString(),
+  }
+  const m = build.requested_by_discord ? `<@${build.requested_by_discord}>` : ''
+  void post(WEBDEV_WEBHOOK_URL, m ? `${m} Your site is ready to sell.` : `Site ready: ${build.business_name}`, [embed])
+}
+
+// Fired when a website sale's Stripe checkout completes. Celebrates the close
+// and flags that the hookup checklist is now seeded for fulfilment.
+export function notifyWebsitePaid(
+  sale: { business_name: string; amount: number | null; requested_by?: string | null },
+): void {
+  const embed: Embed = {
+    title: `💰 Website sold: ${sale.business_name}`,
+    url: `${OS_URL}/websites`,
+    color: 0x22C55E,
+    description: `Payment cleared${sale.amount ? ` (£${sale.amount.toLocaleString()})` : ''}. Hookup checklist created, client added to the newsletter.`,
+    fields: sale.requested_by ? [{ name: 'Closed by', value: sale.requested_by, inline: true }] : [],
+    footer: { text: 'August OS Websites' },
+    timestamp: new Date().toISOString(),
+  }
+  void post(WEBDEV_WEBHOOK_URL, `💰 Website sold: ${sale.business_name}`, [embed])
 }
 
 // ─── Meta connection health (pulse agent) ──────────────────────────────────
