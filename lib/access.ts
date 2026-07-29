@@ -5,7 +5,7 @@
 export type Role = 'FULL_ACCESS' | 'COLD_CALLER' | 'FULFILMENT_ONLY'
 
 export const FULL_ACCESS = ['seb@augustmarketing.co.uk']
-export const COLD_CALLER = ['juanzy509@gmail.com']
+export const COLD_CALLER = ['juanzy509@gmail.com', 'fahad_naj@hotmail.com']
 export const FULFILMENT_ONLY = ['juandagato@gmail.com', 'reachalvincases@gmail.com', 'teeagginie1@gmail.com']
 
 // Always visible to any authenticated user, regardless of role.

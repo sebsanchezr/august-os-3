@@ -4,6 +4,11 @@ import Link from 'next/link'
 
 const sops = [
   {
+    href: '/sop/cold-caller-login',
+    title: 'Cold Caller Login & Workflow',
+    description: 'New cold caller guide: dashboard overview, EOD reports (critical!), website requests, resources, and the complete sales process.',
+  },
+  {
     href: '/sop/os-guide',
     title: 'August OS Team Guide',
     description: 'The daily operating manual: morning routines per role, task flow, client cadence, creatives, ads, and troubleshooting.',
