@@ -2,7 +2,7 @@
 // Used by components/nav.tsx (client-side nav filtering) and
 // middleware.ts (server-side route enforcement).
 
-export type Role = 'FULL_ACCESS' | 'COLD_CALLER' | 'FULFILMENT_ONLY'
+export type Role = 'FULL_ACCESS' | 'COLD_CALLER' | 'FULFILMENT_ONLY' | 'NO_ACCESS'
 
 export const FULL_ACCESS = ['seb@augustmarketing.co.uk']
 export const COLD_CALLER = [
@@ -34,8 +34,9 @@ export function getRole(email: string | null | undefined): Role {
   if (FULL_ACCESS.includes(normalized)) return 'FULL_ACCESS'
   if (COLD_CALLER.includes(normalized)) return 'COLD_CALLER'
   if (FULFILMENT_ONLY.includes(normalized)) return 'FULFILMENT_ONLY'
-  // Unknown authenticated emails default to the safest, most restrictive role.
-  return 'FULFILMENT_ONLY'
+  // Unknown authenticated emails get nothing but the always-allowed pages
+  // until Seb explicitly assigns them a role above.
+  return 'NO_ACCESS'
 }
 
 function matchesPrefix(pathname: string, prefixes: string[]): boolean {
@@ -47,14 +48,16 @@ export function canAccessPath(email: string | null | undefined, pathname: string
   if (role === 'FULL_ACCESS') return true
   if (matchesPrefix(pathname, ALWAYS_ALLOWED_PREFIXES)) return true
   if (role === 'COLD_CALLER') return matchesPrefix(pathname, COLD_CALLER_PREFIXES)
-  return matchesPrefix(pathname, FULFILMENT_PREFIXES)
+  if (role === 'FULFILMENT_ONLY') return matchesPrefix(pathname, FULFILMENT_PREFIXES)
+  return false
 }
 
 export function homePath(email: string | null | undefined): string {
   const role = getRole(email)
   if (role === 'FULL_ACCESS') return '/overview'
   if (role === 'COLD_CALLER') return '/dashboard'
-  return '/fulfilment'
+  if (role === 'FULFILMENT_ONLY') return '/fulfilment'
+  return '/updates'
 }
 
 // ─── Nav filtering ──────────────────────────────────────────────────────────
