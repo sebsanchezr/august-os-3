@@ -1,11 +1,14 @@
 'use client'
 
 import Link from 'next/link'
+import { useEffect, useState } from 'react'
 import {
   Phone, FileText, Linkedin, Mail, TrendingUp, KanbanSquare, BookOpen,
   ArrowRight, ClipboardList, CheckSquare, AlertTriangle,
   CalendarDays, PhoneCall, Rocket, Briefcase,
 } from 'lucide-react'
+import { getSupabaseBrowser } from '@/lib/supabase-browser'
+import { canAccessPath } from '@/lib/access'
 
 const navGroups = [
   {
@@ -47,6 +50,19 @@ const stats = [
 ]
 
 export default function OverviewPage() {
+  const [userEmail, setUserEmail] = useState<string | null>(null)
+
+  useEffect(() => {
+    const supabase = getSupabaseBrowser()
+    supabase.auth.getUser().then(({ data }) => {
+      setUserEmail(data.user?.email ?? null)
+    })
+  }, [])
+
+  const visibleGroups = navGroups
+    .map(group => ({ ...group, items: group.items.filter(item => canAccessPath(userEmail, item.href)) }))
+    .filter(group => group.items.length > 0)
+
   return (
     <div className="p-8 max-w-5xl mx-auto">
       {/* Hero */}
@@ -109,7 +125,7 @@ export default function OverviewPage() {
           Get around
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {navGroups.map((group) => (
+          {visibleGroups.map((group) => (
             <div
               key={group.label}
               className="rounded-xl border border-[#1c2035] bg-[#10121a] p-5"
