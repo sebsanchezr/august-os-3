@@ -7,6 +7,8 @@ import { TrendChart } from '@/components/trend-chart'
 import { LeaderboardTable } from '@/components/leaderboard-table'
 import { ActivityFeed } from '@/components/activity-feed'
 import { pctChange } from '@/lib/utils'
+import { getSupabaseBrowser } from '@/lib/supabase-browser'
+import { getRole } from '@/lib/access'
 import type { DashboardMetrics, CallerStats, TrendPoint, RecentActivity } from '@/lib/types'
 
 type Window = 'yesterday' | '7d' | '30d'
@@ -151,6 +153,14 @@ export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [isOwner, setIsOwner] = useState(false)
+
+  useEffect(() => {
+    const supabase = getSupabaseBrowser()
+    supabase.auth.getUser().then(({ data }) => {
+      setIsOwner(getRole(data.user?.email) === 'FULL_ACCESS')
+    })
+  }, [])
 
   const fetchData = useCallback(async (win: Window) => {
     setLoading(true)
@@ -212,7 +222,9 @@ export default function DashboardPage() {
           <KpiCard label="Positives" value={m.positive_replies} change={pctChange(m.positive_replies, m.prev_positive_replies)} compact />
           <KpiCard label="Booked" value={m.calls_booked} change={pctChange(m.calls_booked, m.prev_calls_booked)} compact accent="blue" />
           <KpiCard label="Closed" value={m.deals_closed} change={pctChange(m.deals_closed, m.prev_deals_closed)} compact accent="green" />
-          <KpiCard label="Revenue" value={`£${m.setup_revenue.toLocaleString()}`} change={pctChange(m.setup_revenue, m.prev_setup_revenue)} compact accent="green" />
+          {isOwner && (
+            <KpiCard label="Revenue" value={`£${m.setup_revenue.toLocaleString()}`} change={pctChange(m.setup_revenue, m.prev_setup_revenue)} compact accent="green" />
+          )}
           <KpiCard label="Close %" value={`${(m.close_rate * 100).toFixed(1)}%`} compact accent="blue" />
         </div>
       ) : null}
@@ -246,7 +258,7 @@ export default function DashboardPage() {
           </div>
           <div className="rounded-xl border border-[#1c2035] bg-[#10121a] p-5">
             <p className="text-sm font-medium text-[#e4e6f0] mb-4">Leaderboard</p>
-            <LeaderboardTable data={data.leaderboard} />
+            <LeaderboardTable data={data.leaderboard} showRevenue={isOwner} />
           </div>
         </div>
       ) : null}

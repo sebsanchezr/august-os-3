@@ -6,9 +6,10 @@ import type { CallerStats } from '@/lib/types'
 
 interface LeaderboardTableProps {
   data: CallerStats[]
+  showRevenue?: boolean
 }
 
-export function LeaderboardTable({ data }: LeaderboardTableProps) {
+export function LeaderboardTable({ data, showRevenue = false }: LeaderboardTableProps) {
   const sorted = [...data].sort((a, b) => b.closed - a.closed)
 
   if (sorted.length === 0) {
@@ -19,12 +20,16 @@ export function LeaderboardTable({ data }: LeaderboardTableProps) {
     )
   }
 
+  const columns = showRevenue
+    ? ['#', 'Caller', 'Calls', 'Positives', 'Booked', 'Closed', 'Revenue']
+    : ['#', 'Caller', 'Calls', 'Positives', 'Booked', 'Closed']
+
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm border-collapse">
         <thead>
           <tr>
-            {['#', 'Caller', 'Calls', 'Positives', 'Booked', 'Closed', 'Revenue'].map((col) => (
+            {columns.map((col) => (
               <th
                 key={col}
                 className="px-4 py-3 text-left text-xs font-medium text-[#636780] uppercase tracking-wider border-b border-[#1c2035]"
@@ -79,11 +84,13 @@ export function LeaderboardTable({ data }: LeaderboardTableProps) {
                 </td>
 
                 {/* Revenue */}
-                <td className="px-4 py-3 tabular-nums">
-                  <span className={row.revenue > 0 ? 'text-green-400' : 'text-[#636780]'}>
-                    {formatCurrency(row.revenue)}
-                  </span>
-                </td>
+                {showRevenue && (
+                  <td className="px-4 py-3 tabular-nums">
+                    <span className={row.revenue > 0 ? 'text-green-400' : 'text-[#636780]'}>
+                      {formatCurrency(row.revenue)}
+                    </span>
+                  </td>
+                )}
               </tr>
             )
           })}

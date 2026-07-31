@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdmin } from '@/lib/supabase-server'
+import { isOwnerRequest } from '@/lib/access-server'
 import type { DashboardMetrics, CallerStats, TrendPoint, RecentActivity } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
@@ -53,6 +54,7 @@ type EodRow = { report_date: string; caller_name: string; calls_made: number; po
 
 export async function GET(req: NextRequest) {
   try {
+    const isOwner = await isOwnerRequest()
     const win = new URL(req.url).searchParams.get('window') ?? '7d'
     const { start, end, days, prevStart, prevEnd } = getReportDateWindow(win)
     const { windowStart, windowEnd } = getWindowBounds(win)
@@ -190,7 +192,19 @@ export async function GET(req: NextRequest) {
       })),
     ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 25)
 
-    return NextResponse.json({ metrics, trend: trendDays, leaderboard, recent }, { headers: { 'Cache-Control': 'no-store' } })
+    // Revenue/£ figures are FULL_ACCESS-only. Middleware doesn't role-gate
+    // /api/*, so strip these here rather than relying on the UI to hide them.
+    const responseMetrics = isOwner
+      ? metrics
+      : { ...metrics, setup_revenue: 0, monthly_revenue: 0, prev_setup_revenue: 0 }
+    const responseLeaderboard = isOwner
+      ? leaderboard
+      : leaderboard.map(row => ({ ...row, revenue: 0 }))
+
+    return NextResponse.json(
+      { metrics: responseMetrics, trend: trendDays, leaderboard: responseLeaderboard, recent },
+      { headers: { 'Cache-Control': 'no-store' } }
+    )
   } catch (err) {
     console.error('[dashboard/route]', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
