@@ -49,8 +49,8 @@ const STATUS_LABEL: Record<Status, string> = {
   requested: 'Requested',
   approved: 'Approved',
   building: 'Building',
-  built: 'Built',
-  site_approved: 'Site approved',
+  built: 'Sent for approval',
+  site_approved: 'Completed',
   sent: 'Sent to caller',
   paid: 'Paid',
   live: 'Live',
@@ -112,7 +112,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       throw error
     }
 
-    if (newStatus && ['approved', 'built', 'site_approved'].includes(newStatus)) {
+    if (newStatus && ['site_approved'].includes(newStatus)) {
       void postDiscord(
         `Website build update: ${data.business_name} is now ${STATUS_LABEL[newStatus]}`,
         [{

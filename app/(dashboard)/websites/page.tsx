@@ -23,6 +23,10 @@ interface WebsiteBuild {
   existing_site_url: string | null
   sale_amount: number | null
   paid_at: string | null
+  brief_summary: string | null
+  brief_talking_points: string[] | null
+  brief_objection_prep: string[] | null
+  build_error: string | null
   created_at: string
 }
 
@@ -30,11 +34,11 @@ const NICHE_OPTIONS = ['roofing', 'plumbing', 'electrical', 'landscaping', 'othe
 const SERVICE_OPTIONS = ['Pitched roofs', 'Flat roofs', 'Repairs', 'Guttering & fascias', 'Chimney work', 'Emergency callout']
 
 const STATUS_LABEL: Record<WebsiteBuild['status'], string> = {
-  requested: 'Requested',
-  approved: 'Approved',
+  requested: 'Building',
+  approved: 'Building',
   building: 'Building',
-  built: 'Built',
-  site_approved: 'Site approved',
+  built: 'Sent for approval',
+  site_approved: 'Completed',
   sent: 'Sent to caller',
   paid: 'Paid',
   live: 'Live',
@@ -320,6 +324,24 @@ export default function WebsitesPage() {
                       {b.site_url} <ExternalLink size={10} />
                     </a>
                   )}
+                  {b.build_error && (
+                    <p className="text-xs text-amber-400 mt-1.5">Site deploy issue: {b.build_error}</p>
+                  )}
+                  {b.brief_summary && (
+                    <div className="mt-2.5 rounded-lg border border-[#1c2035] bg-[#181b27]/60 px-3 py-2.5 space-y-1.5">
+                      <p className="text-xs text-[#e4e6f0]">{b.brief_summary}</p>
+                      {!!b.brief_talking_points?.length && (
+                        <ul className="text-[11px] text-[#8a8fb0] list-disc list-inside space-y-0.5">
+                          {b.brief_talking_points.map((t, i) => <li key={i}>{t}</li>)}
+                        </ul>
+                      )}
+                      {!!b.brief_objection_prep?.length && (
+                        <ul className="text-[11px] text-[#636780] list-disc list-inside space-y-0.5">
+                          {b.brief_objection_prep.map((t, i) => <li key={i}>{t}</li>)}
+                        </ul>
+                      )}
+                    </div>
+                  )}
                   {/* On the sales call: copy the right Stripe link to send the prospect. */}
                   {(b.status === 'sent' || b.status === 'site_approved') && <PaymentPicker buildId={b.id} />}
                   {(b.status === 'paid' || b.status === 'live') && (
@@ -333,10 +355,13 @@ export default function WebsitesPage() {
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
-                  {b.status === 'requested' && (
+                  {(b.status === 'requested' || b.status === 'approved' || b.status === 'building') && (
+                    <span className="text-xs text-amber-400 px-3 py-1.5">Building...</span>
+                  )}
+                  {b.status === 'built' && (
                     <>
                       <button
-                        onClick={() => updateStatus(b.id, 'approved')}
+                        onClick={() => updateStatus(b.id, 'site_approved')}
                         disabled={busyId === b.id}
                         className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-lg px-3 py-1.5 text-xs font-medium transition-colors"
                       >
@@ -350,18 +375,6 @@ export default function WebsitesPage() {
                         <XCircle size={12} /> Reject
                       </button>
                     </>
-                  )}
-                  {(b.status === 'approved' || b.status === 'building') && (
-                    <span className="text-xs text-[#636780] px-3 py-1.5">In build queue</span>
-                  )}
-                  {b.status === 'built' && (
-                    <button
-                      onClick={() => updateStatus(b.id, 'site_approved')}
-                      disabled={busyId === b.id}
-                      className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-lg px-3 py-1.5 text-xs font-medium transition-colors"
-                    >
-                      <Check size={12} /> Approve site
-                    </button>
                   )}
                   {b.status === 'site_approved' && (
                     <button
@@ -572,7 +585,7 @@ export default function WebsitesPage() {
                   disabled={submitting}
                   className="flex-1 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors"
                 >
-                  {submitting ? 'Sending...' : 'Request website'}
+                  {submitting ? 'Building site... (up to a minute)' : 'Request website'}
                 </button>
               </div>
             </form>
