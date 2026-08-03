@@ -21,8 +21,8 @@ export function LeaderboardTable({ data, showRevenue = false }: LeaderboardTable
   }
 
   const columns = showRevenue
-    ? ['#', 'Caller', 'Calls', 'Positives', 'Booked', 'Closed', 'Revenue']
-    : ['#', 'Caller', 'Calls', 'Positives', 'Booked', 'Closed']
+    ? ['#', 'Caller', 'Dials', 'Connected', 'Positives', 'Booked', 'Closed', 'Revenue']
+    : ['#', 'Caller', 'Dials', 'Connected', 'Positives', 'Booked', 'Closed']
 
   return (
     <div className="overflow-x-auto">
@@ -64,6 +64,11 @@ export function LeaderboardTable({ data, showRevenue = false }: LeaderboardTable
                 {/* Calls */}
                 <td className="px-4 py-3 text-[#e4e6f0] tabular-nums">
                   {row.calls.toLocaleString()}
+                </td>
+
+                {/* Connected */}
+                <td className="px-4 py-3 text-[#e4e6f0] tabular-nums">
+                  {row.connected.toLocaleString()}
                 </td>
 
                 {/* Positives */}

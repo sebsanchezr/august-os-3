@@ -50,7 +50,7 @@ function getWindowBounds(window: string): { windowStart: string; windowEnd: stri
   return { windowStart: new Date(Date.now() - days * 86400000).toISOString(), windowEnd: null, days }
 }
 
-type EodRow = { report_date: string; caller_name: string; calls_made: number; positive_replies: number; calls_booked: number }
+type EodRow = { report_date: string; caller_name: string; calls_made: number; positive_replies: number; calls_booked: number; no_pickups: number }
 
 export async function GET(req: NextRequest) {
   try {
@@ -77,8 +77,8 @@ export async function GET(req: NextRequest) {
       { data: dealsData },
       { data: prevDealsData },
     ] = await Promise.all([
-      supabase.from('eod_reports').select('report_date, caller_name, calls_made, positive_replies, calls_booked').gte('report_date', start).lte('report_date', end),
-      supabase.from('eod_reports').select('calls_made, positive_replies, calls_booked').gte('report_date', prevStart).lte('report_date', prevEnd),
+      supabase.from('eod_reports').select('report_date, caller_name, calls_made, positive_replies, calls_booked, no_pickups').gte('report_date', start).lte('report_date', end),
+      supabase.from('eod_reports').select('calls_made, positive_replies, calls_booked, no_pickups').gte('report_date', prevStart).lte('report_date', prevEnd),
       applyWindowDeals(supabase.from('deals').select('setup_amount, monthly_amount').in('status', ['paid', 'live']), windowStart, windowEnd),
       supabase.from('deals').select('setup_amount').gte('closed_at', dealsPrevStart).lt('closed_at', dealsPrevEnd).in('status', ['paid', 'live']),
     ])
@@ -86,10 +86,14 @@ export async function GET(req: NextRequest) {
     const eodRows = (eodCurrent ?? []) as EodRow[]
 
     const calls_made = eodRows.reduce((s, r) => s + (r.calls_made ?? 0), 0)
+    const no_pickups = eodRows.reduce((s, r) => s + (r.no_pickups ?? 0), 0)
+    const connected_calls = Math.max(0, calls_made - no_pickups)
     const positive_replies = eodRows.reduce((s, r) => s + (r.positive_replies ?? 0), 0)
     const calls_booked = eodRows.reduce((s, r) => s + (r.calls_booked ?? 0), 0)
 
     const prev_calls_made = (eodPrev ?? []).reduce((s, r) => s + (r.calls_made ?? 0), 0)
+    const prev_no_pickups = (eodPrev ?? []).reduce((s, r) => s + (r.no_pickups ?? 0), 0)
+    const prev_connected_calls = Math.max(0, prev_calls_made - prev_no_pickups)
     const prev_positive_replies = (eodPrev ?? []).reduce((s, r) => s + (r.positive_replies ?? 0), 0)
     const prev_calls_booked = (eodPrev ?? []).reduce((s, r) => s + (r.calls_booked ?? 0), 0)
 
@@ -101,14 +105,22 @@ export async function GET(req: NextRequest) {
 
     const metrics: DashboardMetrics = {
       calls_made,
+      no_pickups,
+      connected_calls,
       positive_replies,
       calls_booked,
       deals_closed,
       setup_revenue,
       monthly_revenue,
       close_rate: calls_booked > 0 ? deals_closed / calls_booked : 0,
-      book_rate: calls_made > 0 ? calls_booked / calls_made : 0,
+      // Book rate off connected calls, not raw dials — a dial that never picks
+      // up was never a real chance to book, so counting it dilutes the rate.
+      book_rate: connected_calls > 0 ? calls_booked / connected_calls : 0,
+      positive_rate: connected_calls > 0 ? positive_replies / connected_calls : 0,
+      pickup_rate: calls_made > 0 ? connected_calls / calls_made : 0,
       prev_calls_made,
+      prev_no_pickups,
+      prev_connected_calls,
       prev_positive_replies,
       prev_calls_booked,
       prev_deals_closed,
@@ -118,22 +130,23 @@ export async function GET(req: NextRequest) {
     // ─── Trend: calls + booked from eod_reports (by report_date), closed from deals ──
     const { data: rawDeals } = await applyWindowDeals(supabase.from('deals').select('closed_at').in('status', ['paid', 'live']), windowStart, windowEnd)
 
-    const trendMap: Record<string, { calls: number; booked: number; closed: number }> = {}
+    const trendMap: Record<string, { calls: number; connected: number; booked: number; closed: number }> = {}
     eodRows.forEach(r => {
       const d = r.report_date
-      if (!trendMap[d]) trendMap[d] = { calls: 0, booked: 0, closed: 0 }
+      if (!trendMap[d]) trendMap[d] = { calls: 0, connected: 0, booked: 0, closed: 0 }
       trendMap[d].calls += r.calls_made ?? 0
+      trendMap[d].connected += Math.max(0, (r.calls_made ?? 0) - (r.no_pickups ?? 0))
       trendMap[d].booked += r.calls_booked ?? 0
     })
     ;(rawDeals ?? []).forEach((r: { closed_at: string }) => {
       const d = r.closed_at.slice(0, 10)
-      if (!trendMap[d]) trendMap[d] = { calls: 0, booked: 0, closed: 0 }
+      if (!trendMap[d]) trendMap[d] = { calls: 0, connected: 0, booked: 0, closed: 0 }
       trendMap[d].closed++
     })
 
     const trendDays: TrendPoint[] = []
     for (let d = start; ; d = addDays(d, 1)) {
-      trendDays.push({ date: d, ...(trendMap[d] ?? { calls: 0, booked: 0, closed: 0 }) })
+      trendDays.push({ date: d, ...(trendMap[d] ?? { calls: 0, connected: 0, booked: 0, closed: 0 }) })
       if (d === end) break
     }
 
@@ -148,8 +161,9 @@ export async function GET(req: NextRequest) {
     eodRows.forEach(r => {
       const name = r.caller_name?.trim() || 'Unknown'
       const key = name.toLowerCase()
-      if (!callerMap[key]) callerMap[key] = { caller_id: name, caller_name: name, calls: 0, positives: 0, booked: 0, closed: 0, revenue: 0 }
+      if (!callerMap[key]) callerMap[key] = { caller_id: name, caller_name: name, calls: 0, connected: 0, positives: 0, booked: 0, closed: 0, revenue: 0 }
       callerMap[key].calls += r.calls_made ?? 0
+      callerMap[key].connected += Math.max(0, (r.calls_made ?? 0) - (r.no_pickups ?? 0))
       callerMap[key].positives += r.positive_replies ?? 0
       callerMap[key].booked += r.calls_booked ?? 0
     })
@@ -170,17 +184,18 @@ export async function GET(req: NextRequest) {
 
     // ─── Recent activity: latest EOD submissions + recent bookings ─────────────
     const [{ data: recentEod }, { data: recentBookings }] = await Promise.all([
-      supabase.from('eod_reports').select('id, report_date, caller_name, calls_made, positive_replies, calls_booked, notes, created_at').order('report_date', { ascending: false }).order('created_at', { ascending: false }).limit(20),
+      supabase.from('eod_reports').select('id, report_date, caller_name, calls_made, positive_replies, calls_booked, no_pickups, notes, created_at').order('report_date', { ascending: false }).order('created_at', { ascending: false }).limit(20),
       supabase.from('bookings').select('id, business_name, created_at, caller_id, callers(name)').order('created_at', { ascending: false }).limit(5),
     ])
 
     const recent: RecentActivity[] = [
       ...(recentEod ?? []).map(r => {
         const notesSnippet = r.notes ? `: "${r.notes.length > 60 ? r.notes.slice(0, 60) + '...' : r.notes}"` : ''
+        const conn = Math.max(0, (r.calls_made ?? 0) - (r.no_pickups ?? 0))
         return {
           id: r.id,
           type: 'call' as const,
-          description: `EOD for ${r.report_date} - ${r.calls_made} calls, ${r.positive_replies} positives, ${r.calls_booked} booked${notesSnippet}`,
+          description: `EOD for ${r.report_date} - ${r.calls_made} dials (${conn} connected), ${r.positive_replies} positives, ${r.calls_booked} booked${notesSnippet}`,
           caller_name: r.caller_name ?? null,
           created_at: r.created_at,
         }

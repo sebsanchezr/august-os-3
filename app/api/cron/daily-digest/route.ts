@@ -90,7 +90,7 @@ async function handle(req: NextRequest) {
   ] = await Promise.all([
     supabase
       .from('eod_reports')
-      .select('calls_made, positive_replies, calls_booked')
+      .select('calls_made, positive_replies, calls_booked, no_pickups')
       .eq('report_date', yesterdayDateStr),
     supabase
       .from('ce_events')
@@ -143,6 +143,8 @@ async function handle(req: NextRequest) {
 
   const eodRows = eodRes.data ?? []
   const callsMade = eodRows.reduce((s, r) => s + (r.calls_made ?? 0), 0)
+  const noPickups = eodRows.reduce((s, r) => s + (r.no_pickups ?? 0), 0)
+  const connectedCalls = Math.max(0, callsMade - noPickups)
   const positiveReplies = eodRows.reduce((s, r) => s + (r.positive_replies ?? 0), 0)
   const callsBooked = eodRows.reduce((s, r) => s + (r.calls_booked ?? 0), 0)
 
@@ -163,7 +165,7 @@ async function handle(req: NextRequest) {
   const lines: string[] = []
 
   const coldCallingParts: string[] = []
-  if (callsMade > 0) coldCallingParts.push(`${callsMade} dials`)
+  if (callsMade > 0) coldCallingParts.push(`${callsMade} dials (${connectedCalls} connected)`)
   if (positiveReplies > 0) coldCallingParts.push(`${positiveReplies} positive`)
   if (callsBooked > 0) coldCallingParts.push(`${callsBooked} booked`)
   if (coldCallingParts.length) lines.push(`Cold calling: ${coldCallingParts.join(', ')}.`)

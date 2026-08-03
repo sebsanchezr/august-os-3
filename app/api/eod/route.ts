@@ -38,7 +38,7 @@ const MISSING_CONSTRAINT_CODE = '42P10'
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { report_date, caller_name, calls_made, positive_replies, calls_booked, notes } = body
+    const { report_date, caller_name, calls_made, positive_replies, calls_booked, no_pickups, notes } = body
 
     if (!report_date || !caller_name || calls_made === undefined) {
       return NextResponse.json({ error: 'report_date, caller_name, and calls_made are required' }, { status: 400 })
@@ -48,6 +48,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'report_date cannot be in the future' }, { status: 400 })
     }
 
+    if (Number(no_pickups ?? 0) > Number(calls_made)) {
+      return NextResponse.json({ error: 'no_pickups cannot exceed calls_made' }, { status: 400 })
+    }
+
     const supabase = createSupabaseAdmin()
     const record = {
       report_date,
@@ -55,6 +59,7 @@ export async function POST(req: NextRequest) {
       calls_made: Number(calls_made),
       positive_replies: Number(positive_replies ?? 0),
       calls_booked: Number(calls_booked ?? 0),
+      no_pickups: Number(no_pickups ?? 0),
       notes: notes?.trim() || null,
     }
 

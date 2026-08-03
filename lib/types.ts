@@ -397,13 +397,16 @@ export type Deal = {
   stripe_ref: string | null; status: DealStatus; closed_at: string; caller_id: string | null
 }
 export type DashboardMetrics = {
-  calls_made: number; positive_replies: number; calls_booked: number; deals_closed: number
+  calls_made: number; no_pickups: number; connected_calls: number
+  positive_replies: number; calls_booked: number; deals_closed: number
   setup_revenue: number; monthly_revenue: number; close_rate: number; book_rate: number
-  prev_calls_made: number; prev_positive_replies: number; prev_calls_booked: number
+  positive_rate: number; pickup_rate: number
+  prev_calls_made: number; prev_no_pickups: number; prev_connected_calls: number
+  prev_positive_replies: number; prev_calls_booked: number
   prev_deals_closed: number; prev_setup_revenue: number
 }
-export type CallerStats = { caller_id: string; caller_name: string; calls: number; positives: number; booked: number; closed: number; revenue: number }
-export type TrendPoint = { date: string; calls: number; booked: number; closed: number }
+export type CallerStats = { caller_id: string; caller_name: string; calls: number; connected: number; positives: number; booked: number; closed: number; revenue: number }
+export type TrendPoint = { date: string; calls: number; connected: number; booked: number; closed: number }
 export type RecentActivity = { id: string; type: 'call' | 'booking' | 'deal'; description: string; caller_name: string | null; created_at: string }
 
 // Acquisition Command Center + cross-channel pipeline types

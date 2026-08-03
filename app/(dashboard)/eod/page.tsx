@@ -10,6 +10,7 @@ interface EodReport {
   calls_made: number
   positive_replies: number
   calls_booked: number
+  no_pickups: number
   notes: string | null
   created_at: string
 }
@@ -17,6 +18,14 @@ interface EodReport {
 function pct(num: number, denom: number) {
   if (!denom) return null
   return ((num / denom) * 100).toFixed(1)
+}
+
+// Connected calls = dials minus the ones that never picked up (no answer,
+// voicemail, dead line). Rates should be judged against this, not raw dials,
+// otherwise a caller who dials 50 numbers and reaches nobody looks identical
+// to one who dials 50 and has 50 real conversations.
+function connected(r: { calls_made: number; no_pickups: number }) {
+  return Math.max(0, r.calls_made - (r.no_pickups ?? 0))
 }
 
 function PctBadge({ value }: { value: string | null }) {
@@ -51,6 +60,7 @@ export default function EodPage() {
     report_date: new Date().toISOString().slice(0, 10),
     caller_name: '',
     calls_made: '',
+    no_pickups: '',
     positive_replies: '',
     calls_booked: '',
     notes: '',
@@ -68,8 +78,9 @@ export default function EodPage() {
 
   useEffect(() => { fetchReports() }, [fetchReports])
 
-  const livePositivePct = pct(Number(form.positive_replies), Number(form.calls_made))
-  const liveBookPct = pct(Number(form.calls_booked), Number(form.calls_made))
+  const liveConnected = Math.max(0, Number(form.calls_made || 0) - Number(form.no_pickups || 0))
+  const livePositivePct = pct(Number(form.positive_replies), liveConnected)
+  const liveBookPct = pct(Number(form.calls_booked), liveConnected)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -84,6 +95,7 @@ export default function EodPage() {
           report_date: form.report_date,
           caller_name: form.caller_name,
           calls_made: Number(form.calls_made) || 0,
+          no_pickups: Number(form.no_pickups) || 0,
           positive_replies: Number(form.positive_replies) || 0,
           calls_booked: Number(form.calls_booked) || 0,
           notes: form.notes || null,
@@ -91,7 +103,7 @@ export default function EodPage() {
       })
       if (!res.ok) { const j = await res.json(); throw new Error(j.error ?? 'Failed') }
       setShowModal(false)
-      setForm({ report_date: new Date().toISOString().slice(0, 10), caller_name: '', calls_made: '', positive_replies: '', calls_booked: '', notes: '' })
+      setForm({ report_date: new Date().toISOString().slice(0, 10), caller_name: '', calls_made: '', no_pickups: '', positive_replies: '', calls_booked: '', notes: '' })
       await fetchReports()
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Something went wrong')
@@ -103,9 +115,11 @@ export default function EodPage() {
   // Totals row
   const totals = reports.reduce((acc, r) => ({
     calls: acc.calls + r.calls_made,
+    noPickups: acc.noPickups + (r.no_pickups ?? 0),
+    connected: acc.connected + connected(r),
     positives: acc.positives + r.positive_replies,
     booked: acc.booked + r.calls_booked,
-  }), { calls: 0, positives: 0, booked: 0 })
+  }), { calls: 0, noPickups: 0, connected: 0, positives: 0, booked: 0 })
 
   return (
     <div className="p-6 min-h-full">
@@ -126,11 +140,12 @@ export default function EodPage() {
 
       {/* Summary strip */}
       {reports.length > 0 && (
-        <div className="grid grid-cols-3 gap-3 mb-5">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
           {[
-            { label: 'Total Calls', value: totals.calls.toLocaleString() },
-            { label: 'Total Positives', value: `${totals.positives.toLocaleString()} (${pct(totals.positives, totals.calls) ?? '0'}%)` },
-            { label: 'Total Booked', value: `${totals.booked.toLocaleString()} (${pct(totals.booked, totals.calls) ?? '0'}%)` },
+            { label: 'Total Dials', value: totals.calls.toLocaleString() },
+            { label: 'Connected', value: `${totals.connected.toLocaleString()} (${pct(totals.connected, totals.calls) ?? '0'}%)` },
+            { label: 'Total Positives', value: `${totals.positives.toLocaleString()} (${pct(totals.positives, totals.connected) ?? '0'}%)` },
+            { label: 'Total Booked', value: `${totals.booked.toLocaleString()} (${pct(totals.booked, totals.connected) ?? '0'}%)` },
           ].map(({ label, value }) => (
             <div key={label} className="rounded-xl border border-[#1c2035] bg-[#10121a] px-4 py-3">
               <p className="text-[10px] font-medium text-[#636780] uppercase tracking-wider mb-1">{label}</p>
@@ -156,7 +171,7 @@ export default function EodPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-[#1c2035]">
-                  {['Date', 'Caller', 'Calls', 'Positives', 'Positive %', 'Booked', 'Book %', 'Notes'].map(h => (
+                  {['Date', 'Caller', 'Dials', 'No Pickup', 'Connected', 'Positives', 'Positive %', 'Booked', 'Book %', 'Notes'].map(h => (
                     <th key={h} className="px-4 py-3 text-left text-[10px] font-semibold text-[#636780] uppercase tracking-wider whitespace-nowrap">
                       {h}
                     </th>
@@ -166,6 +181,7 @@ export default function EodPage() {
               <tbody>
                 {reports.map((r, i) => {
                   const prev = reports[i + 1]
+                  const conn = connected(r)
                   return (
                     <tr key={r.id} className="border-b border-[#1c2035] last:border-0 hover:bg-[#181b27]/40 transition-colors">
                       <td className="px-4 py-3 text-xs text-[#e4e6f0] whitespace-nowrap font-medium">{formatDate(r.report_date)}</td>
@@ -176,10 +192,12 @@ export default function EodPage() {
                           {prev && <ChangeIndicator current={r.calls_made} prev={prev.calls_made} />}
                         </div>
                       </td>
+                      <td className="px-4 py-3 text-sm font-mono tabular-nums text-[#636780]">{r.no_pickups ?? 0}</td>
+                      <td className="px-4 py-3 text-sm font-mono tabular-nums text-[#e4e6f0]">{conn}</td>
                       <td className="px-4 py-3 text-sm font-mono tabular-nums text-[#e4e6f0]">{r.positive_replies}</td>
-                      <td className="px-4 py-3"><PctBadge value={pct(r.positive_replies, r.calls_made)} /></td>
+                      <td className="px-4 py-3"><PctBadge value={pct(r.positive_replies, conn)} /></td>
                       <td className="px-4 py-3 text-sm font-mono tabular-nums text-[#e4e6f0]">{r.calls_booked}</td>
-                      <td className="px-4 py-3"><PctBadge value={pct(r.calls_booked, r.calls_made)} /></td>
+                      <td className="px-4 py-3"><PctBadge value={pct(r.calls_booked, conn)} /></td>
                       <td
                         className={`px-4 py-3 text-xs text-[#636780] max-w-[200px] truncate ${r.notes ? 'cursor-pointer hover:text-[#e4e6f0] hover:underline' : ''}`}
                         title={r.notes ?? undefined}
@@ -238,18 +256,39 @@ export default function EodPage() {
                 </div>
               </div>
 
-              {/* Calls made */}
-              <div>
-                <label className="block text-xs font-medium text-[#636780] mb-1.5">Calls made</label>
-                <input
-                  type="number"
-                  min="0"
-                  placeholder="0"
-                  value={form.calls_made}
-                  onChange={e => setForm(f => ({ ...f, calls_made: e.target.value }))}
-                  className="w-full bg-[#181b27] border border-[#1c2035] rounded-lg px-3 py-2 text-sm text-[#e4e6f0] focus:outline-none focus:ring-1 focus:ring-indigo-500 placeholder:text-[#636780] font-mono"
-                />
+              {/* Calls made + No pickups */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-[#636780] mb-1.5">Calls made (dials)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    value={form.calls_made}
+                    onChange={e => setForm(f => ({ ...f, calls_made: e.target.value }))}
+                    className="w-full bg-[#181b27] border border-[#1c2035] rounded-lg px-3 py-2 text-sm text-[#e4e6f0] focus:outline-none focus:ring-1 focus:ring-indigo-500 placeholder:text-[#636780] font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[#636780] mb-1.5">
+                    No pickup <span className="text-[#3d4060]">(no answer/VM)</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    value={form.no_pickups}
+                    onChange={e => setForm(f => ({ ...f, no_pickups: e.target.value }))}
+                    className="w-full bg-[#181b27] border border-[#1c2035] rounded-lg px-3 py-2 text-sm text-[#e4e6f0] focus:outline-none focus:ring-1 focus:ring-indigo-500 placeholder:text-[#636780] font-mono"
+                  />
+                </div>
               </div>
+
+              {liveConnected > 0 && (
+                <p className="text-xs text-[#636780] -mt-2">
+                  Connected calls: <span className="text-[#e4e6f0] font-mono">{liveConnected}</span>
+                </p>
+              )}
 
               {/* Positives + Booked side by side with live % */}
               <div className="grid grid-cols-2 gap-3">

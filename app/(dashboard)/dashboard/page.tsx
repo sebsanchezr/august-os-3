@@ -46,12 +46,33 @@ function levelFor(value: number, target: number): BenchmarkLevel {
 }
 
 function computeBenchmarks(m: DashboardMetrics, leaderboard: CallerStats[], windowDays: number): Benchmark[] {
-  const positiveRate = m.calls_made > 0 ? (m.positive_replies / m.calls_made) * 100 : 0
-  const bookRate = m.calls_made > 0 ? (m.calls_booked / m.calls_made) * 100 : 0
+  // Rates are judged against connected calls, not raw dials — a dial that
+  // never picked up was never a real chance at a positive reply or a booking,
+  // so counting it in the denominator dilutes the read on script/close quality.
+  const connectedCalls = m.connected_calls
+  const positiveRate = connectedCalls > 0 ? (m.positive_replies / connectedCalls) * 100 : 0
+  const bookRate = connectedCalls > 0 ? (m.calls_booked / connectedCalls) * 100 : 0
+  const pickupRate = m.calls_made > 0 ? (connectedCalls / m.calls_made) * 100 : 0
 
   const benchmarks: Benchmark[] = []
 
   if (m.calls_made > 0) {
+    const pickupLevel = levelFor(pickupRate, 50)
+    benchmarks.push({
+      label: 'Pickup rate',
+      value: `${pickupRate.toFixed(1)}%`,
+      target: '50%+',
+      level: pickupLevel,
+      hint:
+        pickupLevel === 'green'
+          ? 'Most dials are connecting, list quality and timing are on point.'
+          : pickupLevel === 'amber'
+            ? 'Below 50% connect rate, check the list quality or call times.'
+            : 'Well below benchmark, most dials are going nowhere, review the list and calling window.',
+    })
+  }
+
+  if (connectedCalls > 0) {
     const level = levelFor(positiveRate, 5)
     benchmarks.push({
       label: 'Positive conversation rate',
@@ -81,8 +102,8 @@ function computeBenchmarks(m: DashboardMetrics, leaderboard: CallerStats[], wind
     })
   } else {
     benchmarks.push(
-      { label: 'Positive conversation rate', value: '-', target: '5-10%', level: 'neutral', hint: 'No calls logged in this window yet.' },
-      { label: 'Booking rate', value: '-', target: '1-3%', level: 'neutral', hint: 'No calls logged in this window yet.' }
+      { label: 'Positive conversation rate', value: '-', target: '5-10%', level: 'neutral', hint: 'No connected calls logged in this window yet.' },
+      { label: 'Booking rate', value: '-', target: '1-3%', level: 'neutral', hint: 'No connected calls logged in this window yet.' }
     )
   }
 
@@ -217,8 +238,9 @@ export default function DashboardPage() {
           {Array.from({ length: 6 }).map((_, i) => <SkeletonKpi key={i} />)}
         </div>
       ) : m ? (
-        <div className="grid grid-cols-3 md:grid-cols-6 gap-3 mb-5">
-          <KpiCard label="Calls" value={m.calls_made} change={pctChange(m.calls_made, m.prev_calls_made)} compact />
+        <div className="grid grid-cols-3 md:grid-cols-7 gap-3 mb-5">
+          <KpiCard label="Dials" value={m.calls_made} change={pctChange(m.calls_made, m.prev_calls_made)} compact />
+          <KpiCard label="Connected" value={m.connected_calls} change={pctChange(m.connected_calls, m.prev_connected_calls)} compact />
           <KpiCard label="Positives" value={m.positive_replies} change={pctChange(m.positive_replies, m.prev_positive_replies)} compact />
           <KpiCard label="Booked" value={m.calls_booked} change={pctChange(m.calls_booked, m.prev_calls_booked)} compact accent="blue" />
           <KpiCard label="Closed" value={m.deals_closed} change={pctChange(m.deals_closed, m.prev_deals_closed)} compact accent="green" />
