@@ -12,6 +12,8 @@ type Order = {
   created_at: string | null
 }
 type Metrics = { total: number; delivered: number; inProgress: number; revenue: number }
+type AgencyAdsSummary = { spend: number; leads: number; cpl: number | null; revenue: number }
+type AgencyAdsRow = { date: string; spend: number; revenue: number; leads: number; purchases: number }
 
 const STAGE_LABEL: Record<string, string> = {
   new: 'New',
@@ -32,6 +34,10 @@ export default function PaidAdsDashboard() {
   const [orders, setOrders] = useState<Order[]>([])
   const [metrics, setMetrics] = useState<Metrics | null>(null)
   const [loading, setLoading] = useState(true)
+  const [adsSummary, setAdsSummary] = useState<AgencyAdsSummary | null>(null)
+  const [adsRows, setAdsRows] = useState<AgencyAdsRow[]>([])
+  const [adsLoading, setAdsLoading] = useState(true)
+  const [adsConnected, setAdsConnected] = useState(true)
 
   const load = useCallback(async () => {
     try {
@@ -43,9 +49,25 @@ export default function PaidAdsDashboard() {
       setLoading(false)
     }
   }, [])
+  const loadAds = useCallback(async () => {
+    try {
+      const res = await fetch('/api/ads?scope=agency')
+      const json = await res.json()
+      if (json.error) {
+        setAdsConnected(false)
+      } else {
+        setAdsSummary(json.summary ?? null)
+        setAdsRows(json.rows ?? [])
+        setAdsConnected(!json.empty)
+      }
+    } finally {
+      setAdsLoading(false)
+    }
+  }, [])
   useEffect(() => {
     load()
-  }, [load])
+    loadAds()
+  }, [load, loadAds])
 
   const fmt = (s: string | null) =>
     s ? new Date(s).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : '—'
@@ -105,9 +127,44 @@ export default function PaidAdsDashboard() {
         )}
       </div>
 
-      <p className="mt-4 text-xs text-[#3d4060]">
-        Ad-spend / ROAS metrics will slot in here once the Meta ad account is connected.
-      </p>
+      <div className="mt-8">
+        <h2 className="text-sm font-semibold text-[#e4e6f0] mb-1">Our ad spend</h2>
+        <p className="text-xs text-[#636780] mb-4">
+          August&apos;s own Meta ad account driving these orders — last 7 days.
+        </p>
+
+        {adsLoading ? (
+          <p className="text-sm text-[#636780] py-6 text-center">Loading…</p>
+        ) : !adsConnected ? (
+          <p className="text-xs text-[#3d4060]">
+            No agency ad spend synced yet. Set <code>AGENCY_META_AD_ACCOUNT_ID</code> to activate — house account (act_1721794349135023) is currently disabled in Meta, needs reactivating or swapping to the account under BM 1020754523930738 first.
+          </p>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+              <KpiCard label="Spend (7d)" prefix="$" value={adsSummary?.spend.toFixed(0) ?? 0} accent="amber" />
+              <KpiCard label="Leads (7d)" value={adsSummary?.leads ?? 0} accent="blue" />
+              <KpiCard label="CPL" prefix="$" value={adsSummary?.cpl ? adsSummary.cpl.toFixed(2) : '—'} accent="default" />
+              <KpiCard label="Revenue (7d)" prefix="$" value={adsSummary?.revenue.toFixed(0) ?? 0} accent="green" />
+            </div>
+            <div className="rounded-xl border border-[#1c2035] bg-[#10121a] p-5">
+              <div className="space-y-2">
+                {adsRows.map((r) => (
+                  <div
+                    key={r.date}
+                    className="grid grid-cols-[70px_1fr_1fr_1fr] items-center gap-3 rounded-lg bg-[#181b27] px-4 py-2.5 text-sm"
+                  >
+                    <span className="text-[#636780] text-xs">{fmt(r.date)}</span>
+                    <span className="text-[#e4e6f0]">${r.spend.toFixed(0)} spend</span>
+                    <span className="text-[#e4e6f0]">{r.leads} leads</span>
+                    <span className="text-[#e4e6f0]">${r.revenue.toFixed(0)} rev</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   )
 }
