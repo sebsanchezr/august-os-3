@@ -24,8 +24,8 @@ const PAYMENT_LINKS: PaymentLink[] = [
   {
     name: 'Full Website',
     amount: '£1,995',
-    subtitle: 'One-time, website + 3 months hosting',
-    url: 'https://buy.stripe.com/PLACEHOLDER_FULL_1995',
+    subtitle: 'One-time, full build',
+    url: 'https://buy.stripe.com/14A00kaES60CbFtd9C4wM01',
     badge: 'Most Popular',
   },
   {
@@ -41,22 +41,40 @@ const PAYMENT_LINKS: PaymentLink[] = [
     url: 'https://buy.stripe.com/4gMeVe4gugFg7pd2uY4wM03',
   },
   {
-    name: 'Website + £500 Deposit',
-    amount: '£500',
-    subtitle: 'Deposit to secure, balance on delivery',
-    url: 'https://buy.stripe.com/PLACEHOLDER_DEPOSIT_500',
+    name: 'Website',
+    amount: '£950',
+    subtitle: 'One-time, full build',
+    url: 'https://buy.stripe.com/fZueVe6oC0Gi8th4D64wM04',
   },
   {
     name: 'Website',
-    amount: '£950',
-    subtitle: 'Starter site, pay in full',
-    url: 'https://buy.stripe.com/PLACEHOLDER_950',
+    amount: '£700',
+    subtitle: 'One-time, full build',
+    url: 'https://buy.stripe.com/7sY6oI00eagSeRF8Tm4wM0a',
   },
   {
-    name: 'Monthly Hosting',
-    amount: '£75/mo',
-    subtitle: 'After 3-month free period',
-    url: 'https://buy.stripe.com/PLACEHOLDER_MONTHLY',
+    name: 'Website',
+    amount: '£500',
+    subtitle: 'One-time, full build',
+    url: 'https://buy.stripe.com/5kQ6oI5ky9cOcJxb1u4wM09',
+  },
+  {
+    name: 'Website',
+    amount: '£300',
+    subtitle: 'One-time, full build',
+    url: 'https://buy.stripe.com/3cIaEYdR4agS9xl7Pi4wM08',
+  },
+  {
+    name: 'Deposit',
+    amount: '£500',
+    subtitle: 'Deposit to secure, balance on delivery',
+    url: 'https://buy.stripe.com/4gM8wQ3cq3Su10P9Xq4wM05',
+  },
+  {
+    name: 'Deposit',
+    amount: '£200',
+    subtitle: 'Deposit to secure, balance on delivery',
+    url: 'https://buy.stripe.com/4gM9AUfZc3Su8thfhK4wM06',
   },
 ];
 
@@ -393,18 +411,6 @@ export default function ResourcesPage() {
           </p>
         </div>
 
-        {/* Section: Stripe Payment Links */}
-        <section className="flex flex-col gap-4">
-          <div className="bg-[#10121a] border border-[#1c2035] rounded-xl p-5 flex flex-col gap-4">
-            <h2 className="text-base font-semibold text-[#e4e6f0]">Stripe Payment Links</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {PAYMENT_LINKS.map((link, i) => (
-                <CopyCard key={i} link={link} />
-              ))}
-            </div>
-          </div>
-        </section>
-
         {/* Section: Leads Tracker */}
         <section>
           <div className="bg-[#10121a] border border-[#1c2035] rounded-xl p-5 flex items-center justify-between gap-4">
@@ -425,6 +431,18 @@ export default function ResourcesPage() {
             >
               Open Sheet <ExternalLink className="h-3.5 w-3.5 text-[#636780]" />
             </a>
+          </div>
+        </section>
+
+        {/* Section: Stripe Payment Links */}
+        <section className="flex flex-col gap-4">
+          <div className="bg-[#10121a] border border-[#1c2035] rounded-xl p-5 flex flex-col gap-4">
+            <h2 className="text-base font-semibold text-[#e4e6f0]">Stripe Payment Links</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {PAYMENT_LINKS.map((link, i) => (
+                <CopyCard key={i} link={link} />
+              ))}
+            </div>
           </div>
         </section>
 
