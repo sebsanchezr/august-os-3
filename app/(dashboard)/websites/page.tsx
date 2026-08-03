@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Plus, X, ExternalLink, Check, XCircle, Copy } from 'lucide-react'
+import { Plus, X, ExternalLink, Check, XCircle, Copy, Pencil } from 'lucide-react'
 import { getSupabaseBrowser } from '@/lib/supabase-browser'
 import { PAYMENT_LINKS, HOSTING_LINK, paymentLinkFor } from '@/lib/websites'
 
@@ -27,6 +27,8 @@ interface WebsiteBuild {
   brief_talking_points: string[] | null
   brief_objection_prep: string[] | null
   build_error: string | null
+  revision: number
+  amend_history: { revision: number; notes: string; requested_by: string; requested_at: string }[] | null
   created_at: string
 }
 
@@ -172,6 +174,10 @@ export default function WebsitesPage() {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [rejectId, setRejectId] = useState<string | null>(null)
   const [rejectReason, setRejectReason] = useState('')
+  const [amendId, setAmendId] = useState<string | null>(null)
+  const [amendNotes, setAmendNotes] = useState('')
+  const [amendSubmitting, setAmendSubmitting] = useState(false)
+  const [amendError, setAmendError] = useState<string | null>(null)
   const [customNiche, setCustomNiche] = useState(false)
 
   const [form, setForm] = useState({
@@ -248,6 +254,28 @@ export default function WebsitesPage() {
     }
   }
 
+  async function submitAmend(id: string) {
+    if (!amendNotes.trim()) { setAmendError('Describe what to change'); return }
+    setAmendSubmitting(true)
+    setAmendError(null)
+    try {
+      const res = await fetch(`/api/websites/${id}/amend`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes: amendNotes, amended_by: userEmail }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Failed')
+      setBuilds(prev => prev.map(b => b.id === id ? json.build : b))
+      setAmendId(null)
+      setAmendNotes('')
+    } catch (err) {
+      setAmendError(err instanceof Error ? err.message : 'Something went wrong')
+    } finally {
+      setAmendSubmitting(false)
+    }
+  }
+
   async function updateStatus(id: string, status: WebsiteBuild['status'], reason?: string) {
     setBusyId(id)
     try {
@@ -302,6 +330,9 @@ export default function WebsitesPage() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <span className="text-sm font-medium text-[#e4e6f0]">{b.business_name}</span>
+                    {b.revision > 1 && (
+                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">v{b.revision}</span>
+                    )}
                     <StatusBadge status={b.status} />
                   </div>
                   <div className="flex items-center gap-3 flex-wrap text-xs text-[#636780]">
@@ -366,6 +397,13 @@ export default function WebsitesPage() {
                         className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-lg px-3 py-1.5 text-xs font-medium transition-colors"
                       >
                         <Check size={12} /> Approve
+                      </button>
+                      <button
+                        onClick={() => { setAmendId(b.id); setAmendNotes(''); setAmendError(null) }}
+                        disabled={busyId === b.id}
+                        className="flex items-center gap-1 text-amber-400 hover:bg-amber-500/10 disabled:opacity-50 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors border border-amber-500/20"
+                      >
+                        <Pencil size={12} /> Amend
                       </button>
                       <button
                         onClick={() => setRejectId(b.id)}
@@ -625,6 +663,54 @@ export default function WebsitesPage() {
                   className="flex-1 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors"
                 >
                   Reject
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Amend modal: send change notes, site rebuilds off the prior version
+          and the revision number bumps so it's clear which link is current. */}
+      {amendId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => !amendSubmitting && setAmendId(null)} />
+          <div className="relative w-full max-w-sm bg-[#10121a] border border-[#1c2035] rounded-2xl shadow-2xl animate-fade-in">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#1c2035]">
+              <div>
+                <h2 className="text-base font-semibold text-[#e4e6f0]">Amend site</h2>
+                <p className="text-xs text-[#636780] mt-0.5">Site rebuilds with these changes, becomes v{(builds.find(b => b.id === amendId)?.revision ?? 1) + 1}</p>
+              </div>
+              <button onClick={() => !amendSubmitting && setAmendId(null)} className="text-[#636780] hover:text-[#e4e6f0] transition-colors p-1 rounded-lg hover:bg-[#181b27]">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <textarea
+                rows={4}
+                autoFocus
+                placeholder="e.g. Change the hero headline, swap the accent colour to blue, add a testimonials section..."
+                value={amendNotes}
+                onChange={e => setAmendNotes(e.target.value)}
+                className="w-full bg-[#181b27] border border-[#1c2035] rounded-lg px-3 py-2 text-sm text-[#e4e6f0] focus:outline-none focus:ring-1 focus:ring-amber-500 placeholder:text-[#636780] resize-none"
+              />
+              {amendError && (
+                <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{amendError}</p>
+              )}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setAmendId(null)}
+                  disabled={amendSubmitting}
+                  className="flex-1 text-[#636780] hover:text-[#e4e6f0] hover:bg-[#181b27] rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => submitAmend(amendId)}
+                  disabled={amendSubmitting}
+                  className="flex-1 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+                >
+                  {amendSubmitting ? 'Rebuilding... (up to a minute)' : 'Send amend'}
                 </button>
               </div>
             </div>

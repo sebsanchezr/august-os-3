@@ -135,6 +135,7 @@ export async function POST(req: NextRequest) {
         status: 'built',
         site_url: result.siteUrl,
         logo_url: result.logoUrl,
+        site_design: result.design,
         brief_summary: result.design.sales_brief.summary,
         brief_talking_points: result.design.sales_brief.talking_points,
         brief_objection_prep: result.design.sales_brief.objection_prep,

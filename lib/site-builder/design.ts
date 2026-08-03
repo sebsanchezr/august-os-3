@@ -60,15 +60,21 @@ export async function generateSiteDesign(input: {
   ownerName: string | null
   notes: string | null
   research: BusinessResearch
+  amend?: { notes: string; previousDesign: SiteDesign }
 }): Promise<SiteDesign> {
-  const fallback = fallbackDesign(input.businessName, input.niche, input.services)
+  const fallback = input.amend ? input.amend.previousDesign : fallbackDesign(input.businessName, input.niche, input.services)
   if (!process.env.ANTHROPIC_API_KEY) return fallback
 
   const researchBlock = input.research.notable_facts.length || input.research.founded_year || input.research.location_detail
     ? `Research found on their existing site/listing:\n- Founded: ${input.research.founded_year || 'unknown'}\n- Years active: ${input.research.years_active || 'unknown'}\n- Location detail: ${input.research.location_detail || 'unknown'}\n- Notable facts: ${input.research.notable_facts.join('; ') || 'none'}`
     : 'No usable research found from their existing site/listing, work from the business details only.'
 
+  const amendBlock = input.amend
+    ? `\nTHIS IS A REVISION of a version already generated. The previous version, in the exact same JSON shape, was:\n\`\`\`json\n${JSON.stringify(input.amend.previousDesign, null, 2)}\n\`\`\`\nThe caller reviewing it requested these changes:\n"${input.amend.notes}"\n\nApply ONLY the requested changes. Keep everything else (wording, palette, structure) the same as the previous version unless the request implies it should change too.\n`
+    : ''
+
   const prompt = `You are building a demo website AND a sales call brief for a cold outreach agency pitching a local business a new website. ${STYLE_RULES}
+${amendBlock}
 
 BUSINESS DETAILS
 Name: ${input.businessName}

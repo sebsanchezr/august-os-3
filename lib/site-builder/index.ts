@@ -16,6 +16,10 @@ export type BuildSiteInput = {
   notes: string | null
   googleUrl: string | null
   existingSiteUrl: string | null
+  // Present only when this is a re-build off caller feedback on an existing
+  // build. Skips research (already have it) and asks the model to revise the
+  // prior design in place rather than start over.
+  amend?: { notes: string; previousDesign: SiteDesign; previousLogoUrl: string | null }
 }
 
 export type BuildSiteResult = {
@@ -37,7 +41,9 @@ function slugify(businessName: string): string {
 }
 
 export async function buildAndDeploySite(input: BuildSiteInput): Promise<BuildSiteResult> {
-  const research = await researchBusiness(input.businessName, [input.existingSiteUrl, input.googleUrl])
+  const research = input.amend
+    ? { founded_year: null, years_active: null, location_detail: null, notable_facts: [], logo_url: input.amend.previousLogoUrl }
+    : await researchBusiness(input.businessName, [input.existingSiteUrl, input.googleUrl])
 
   const design = await generateSiteDesign({
     businessName: input.businessName,
@@ -48,6 +54,7 @@ export async function buildAndDeploySite(input: BuildSiteInput): Promise<BuildSi
     ownerName: input.ownerName,
     notes: input.notes,
     research,
+    amend: input.amend ? { notes: input.amend.notes, previousDesign: input.amend.previousDesign } : undefined,
   })
 
   const html = renderSiteHtml({
