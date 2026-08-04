@@ -150,6 +150,8 @@ export async function POST(req: NextRequest) {
         brief_talking_points: result.design.sales_brief.talking_points,
         brief_objection_prep: result.design.sales_brief.objection_prep,
         build_error: result.deployError,
+        quality_passed: result.quality.passed,
+        quality_warnings: result.quality.warnings,
         updated_at: new Date().toISOString(),
       })
       .eq('id', inserted.id)
@@ -167,14 +169,19 @@ export async function POST(req: NextRequest) {
       ...(brief.talking_points.length ? [{ name: 'Talking points', value: brief.talking_points.map((t: string) => `- ${t}`).join('\n'), inline: false }] : []),
       ...(brief.objection_prep.length ? [{ name: 'Objection prep', value: brief.objection_prep.map((t: string) => `- ${t}`).join('\n'), inline: false }] : []),
       ...(!result.deployed ? [{ name: 'Deploy status', value: result.deployError || 'Site did not deploy, check logs', inline: false }] : []),
+      ...(!result.quality.passed ? [{ name: 'Needs review', value: result.quality.warnings.map(w => `- ${w}`).join('\n'), inline: false }] : []),
     ]
     void postDiscord(
-      result.deployed
+      !result.quality.passed
+        ? `Website needs review: ${finalRecord.business_name}, requested by ${requested_by ?? 'unknown'}`
+        : result.deployed
         ? `Website ready: ${finalRecord.business_name} (${finalRecord.city ?? 'unknown city'}, ${finalRecord.niche}), requested by ${requested_by ?? 'unknown'}`
         : `Website build had issues: ${finalRecord.business_name}, requested by ${requested_by ?? 'unknown'} (brief still below)`,
       [{
-        title: result.deployed ? `Ready for the call: ${finalRecord.business_name}` : `Build issue: ${finalRecord.business_name}`,
-        color: result.deployed ? 0x22C55E : 0xF59E0B,
+        title: !result.quality.passed
+          ? `Needs review: ${finalRecord.business_name}`
+          : result.deployed ? `Ready for the call: ${finalRecord.business_name}` : `Build issue: ${finalRecord.business_name}`,
+        color: !result.quality.passed ? 0xF59E0B : result.deployed ? 0x22C55E : 0xF59E0B,
         fields,
         footer: { text: 'August OS Websites' },
         timestamp: new Date().toISOString(),

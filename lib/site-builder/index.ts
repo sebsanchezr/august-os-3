@@ -2,9 +2,11 @@ import { researchBusiness, type BusinessResearch } from './research'
 import { generateSiteDesign, type SiteDesign } from './design'
 import { renderSiteHtml, type Stat } from './template'
 import { deployStaticSite } from './deploy'
+import { assessBuildQuality, type QualityCheck } from './quality'
 
 export type { SiteDesign } from './design'
 export type { BusinessResearch } from './research'
+export type { QualityCheck } from './quality'
 
 export type BuildSiteInput = {
   businessName: string
@@ -32,6 +34,7 @@ export type BuildSiteResult = {
   deployError: string | null
   design: SiteDesign
   research: BusinessResearch
+  quality: QualityCheck
 }
 
 function slugify(businessName: string, buildId: string): string {
@@ -146,11 +149,19 @@ export async function buildAndDeploySite(input: BuildSiteInput): Promise<BuildSi
   const slug = slugify(input.businessName, input.buildId)
   const deploy = await deployStaticSite(slug, html)
 
+  const quality = assessBuildQuality({
+    deployed: deploy.deployed,
+    deployError: deploy.error || null,
+    design,
+    research,
+  })
+
   return {
     siteUrl: deploy.url,
     deployed: deploy.deployed,
     deployError: deploy.error || null,
     design,
     research,
+    quality,
   }
 }

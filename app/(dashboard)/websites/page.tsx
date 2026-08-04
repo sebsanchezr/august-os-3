@@ -27,6 +27,8 @@ interface WebsiteBuild {
   brief_talking_points: string[] | null
   brief_objection_prep: string[] | null
   build_error: string | null
+  quality_passed: boolean | null
+  quality_warnings: string[] | null
   revision: number
   amend_history: { revision: number; notes: string; requested_by: string; requested_at: string }[] | null
   created_at: string
@@ -64,6 +66,32 @@ function StatusBadge({ status }: { status: WebsiteBuild['status'] }) {
     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border ${STATUS_STYLE[status]}`}>
       {STATUS_LABEL[status]}
     </span>
+  )
+}
+
+// Live thumbnail of the actual demo, not a stale screenshot: the iframe is
+// rendered at 4x the card's width then scaled down 75%, a CSS-only trick
+// that stays responsive without measuring anything in JS. pointer-events is
+// off on the iframe itself so a click always opens the real site in a new
+// tab instead of interacting with the tiny embedded page.
+function SitePreview({ url, businessName }: { url: string; businessName: string }) {
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noreferrer"
+      className="group relative block w-full aspect-[4/3] overflow-hidden bg-[#0b0d14]"
+      title={`Open ${businessName}'s live demo`}
+    >
+      <div className="absolute top-0 left-0 w-[400%] h-[400%] origin-top-left scale-[0.25] pointer-events-none">
+        <iframe src={url} className="w-full h-full border-0" loading="lazy" tabIndex={-1} title={`${businessName} preview`} />
+      </div>
+      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/0 to-black/0 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-3">
+        <span className="inline-flex items-center gap-1.5 text-white text-xs font-medium">
+          <ExternalLink size={12} /> Open live site
+        </span>
+      </div>
+    </a>
   )
 }
 
@@ -312,82 +340,102 @@ export default function WebsitesPage() {
         </button>
       </div>
 
-      {/* Builds list */}
-      <div className="rounded-xl border border-[#1c2035] bg-[#10121a] overflow-hidden">
-        {loading ? (
-          <div className="p-8 text-center text-sm text-[#636780]">Loading website builds...</div>
-        ) : builds.length === 0 ? (
-          <div className="p-12 text-center">
-            <p className="text-sm text-[#636780] mb-3">No website build requests yet.</p>
-            <button onClick={() => setShowModal(true)} className="bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors">
-              Request the first one
-            </button>
-          </div>
-        ) : (
-          <div className="divide-y divide-[#1c2035]">
-            {builds.map(b => (
-              <div key={b.id} className="px-5 py-4 flex items-start justify-between gap-4 hover:bg-[#181b27]/40 transition-colors">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <span className="text-sm font-medium text-[#e4e6f0]">{b.business_name}</span>
-                    {b.revision > 1 && (
-                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">v{b.revision}</span>
-                    )}
-                    <StatusBadge status={b.status} />
-                  </div>
-                  <div className="flex items-center gap-3 flex-wrap text-xs text-[#636780]">
-                    {b.city && <span>{b.city}</span>}
-                    <span className="capitalize">{b.niche}</span>
-                    {b.phone && <span>{b.phone}</span>}
-                    {b.google_url && (
-                      <a href={b.google_url} target="_blank" rel="noreferrer" className="text-indigo-400 hover:underline inline-flex items-center gap-1">
-                        Google/site <ExternalLink size={10} />
-                      </a>
-                    )}
-                  </div>
-                  {b.notes && <p className="text-xs text-[#636780] mt-1.5 whitespace-pre-wrap">{b.notes}</p>}
-                  <div className="flex items-center gap-3 mt-2 text-[10px] text-[#3d4060] uppercase tracking-wider">
-                    <span>{b.requested_by ?? 'unknown'}</span>
-                    <span>{formatDate(b.created_at)}</span>
-                  </div>
-                  {b.site_url && (
-                    <a href={b.site_url} target="_blank" rel="noreferrer" className="text-xs text-green-400 hover:underline inline-flex items-center gap-1 mt-1.5">
-                      {b.site_url} <ExternalLink size={10} />
-                    </a>
-                  )}
-                  {b.build_error && (
-                    <p className="text-xs text-amber-400 mt-1.5">Site deploy issue: {b.build_error}</p>
-                  )}
-                  {b.brief_summary && (
-                    <div className="mt-2.5 rounded-lg border border-[#1c2035] bg-[#181b27]/60 px-3 py-2.5 space-y-1.5">
-                      <p className="text-xs text-[#e4e6f0]">{b.brief_summary}</p>
-                      {!!b.brief_talking_points?.length && (
-                        <ul className="text-[11px] text-[#8a8fb0] list-disc list-inside space-y-0.5">
-                          {b.brief_talking_points.map((t, i) => <li key={i}>{t}</li>)}
-                        </ul>
-                      )}
-                      {!!b.brief_objection_prep?.length && (
-                        <ul className="text-[11px] text-[#636780] list-disc list-inside space-y-0.5">
-                          {b.brief_objection_prep.map((t, i) => <li key={i}>{t}</li>)}
-                        </ul>
-                      )}
-                    </div>
-                  )}
-                  {/* On the sales call: copy the right Stripe link to send the prospect. */}
-                  {(b.status === 'sent' || b.status === 'site_approved') && <PaymentPicker buildId={b.id} />}
-                  {(b.status === 'paid' || b.status === 'live') && (
-                    <>
-                      <p className="text-xs text-green-300 mt-2 inline-flex items-center gap-1.5">
-                        <Check size={12} /> Paid{b.sale_amount ? ` (£${b.sale_amount.toLocaleString()})` : ''}. Client added to newsletter.
-                      </p>
-                      <HookupChecklist buildId={b.id} />
-                    </>
+      {/* Builds grid */}
+      {loading ? (
+        <div className="rounded-xl border border-[#1c2035] bg-[#10121a] p-8 text-center text-sm text-[#636780]">Loading website builds...</div>
+      ) : builds.length === 0 ? (
+        <div className="rounded-xl border border-[#1c2035] bg-[#10121a] p-12 text-center">
+          <p className="text-sm text-[#636780] mb-3">No website build requests yet.</p>
+          <button onClick={() => setShowModal(true)} className="bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors">
+            Request the first one
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {builds.map(b => (
+            <div key={b.id} className="rounded-xl border border-[#1c2035] bg-[#10121a] overflow-hidden flex flex-col hover:border-[#2a2f45] transition-colors">
+              {b.site_url ? (
+                <SitePreview url={b.site_url} businessName={b.business_name} />
+              ) : (
+                <div className="w-full aspect-[4/3] bg-[#0b0d14] flex items-center justify-center">
+                  {(b.status === 'requested' || b.status === 'approved' || b.status === 'building') ? (
+                    <span className="text-xs text-amber-400 inline-flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" /> Building...
+                    </span>
+                  ) : (
+                    <span className="text-2xl font-semibold text-[#2a2f45]">{b.business_name.charAt(0).toUpperCase()}</span>
                   )}
                 </div>
+              )}
 
-                <div className="flex items-center gap-2 shrink-0">
+              <div className="p-4 flex-1 flex flex-col">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                  <span className="text-sm font-medium text-[#e4e6f0] truncate">{b.business_name}</span>
+                  {b.revision > 1 && (
+                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 shrink-0">v{b.revision}</span>
+                  )}
+                  <StatusBadge status={b.status} />
+                  {b.quality_passed === false && (
+                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">Needs review</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 flex-wrap text-xs text-[#636780]">
+                  {b.city && <span>{b.city}</span>}
+                  <span className="capitalize">{b.niche}</span>
+                  {b.phone && <span>{b.phone}</span>}
+                  {b.google_url && (
+                    <a href={b.google_url} target="_blank" rel="noreferrer" className="text-indigo-400 hover:underline inline-flex items-center gap-1">
+                      Google/site <ExternalLink size={10} />
+                    </a>
+                  )}
+                </div>
+                {b.notes && <p className="text-xs text-[#636780] mt-1.5 whitespace-pre-wrap line-clamp-2">{b.notes}</p>}
+                <div className="flex items-center gap-3 mt-2 text-[10px] text-[#3d4060] uppercase tracking-wider">
+                  <span>{b.requested_by ?? 'unknown'}</span>
+                  <span>{formatDate(b.created_at)}</span>
+                </div>
+                {b.site_url && (
+                  <a href={b.site_url} target="_blank" rel="noreferrer" className="text-xs text-green-400 hover:underline inline-flex items-center gap-1 mt-1.5 truncate">
+                    <ExternalLink size={10} className="shrink-0" /> <span className="truncate">{b.site_url}</span>
+                  </a>
+                )}
+                {b.build_error && (
+                  <p className="text-xs text-amber-400 mt-1.5">Site deploy issue: {b.build_error}</p>
+                )}
+                {!!b.quality_warnings?.length && b.quality_passed === false && (
+                  <ul className="mt-1.5 text-[11px] text-amber-400/90 list-disc list-inside space-y-0.5">
+                    {b.quality_warnings.map((w, i) => <li key={i}>{w}</li>)}
+                  </ul>
+                )}
+                {b.brief_summary && (
+                  <div className="mt-2.5 rounded-lg border border-[#1c2035] bg-[#181b27]/60 px-3 py-2.5 space-y-1.5">
+                    <p className="text-xs text-[#e4e6f0]">{b.brief_summary}</p>
+                    {!!b.brief_talking_points?.length && (
+                      <ul className="text-[11px] text-[#8a8fb0] list-disc list-inside space-y-0.5">
+                        {b.brief_talking_points.map((t, i) => <li key={i}>{t}</li>)}
+                      </ul>
+                    )}
+                    {!!b.brief_objection_prep?.length && (
+                      <ul className="text-[11px] text-[#636780] list-disc list-inside space-y-0.5">
+                        {b.brief_objection_prep.map((t, i) => <li key={i}>{t}</li>)}
+                      </ul>
+                    )}
+                  </div>
+                )}
+                {/* On the sales call: copy the right Stripe link to send the prospect. */}
+                {(b.status === 'sent' || b.status === 'site_approved') && <PaymentPicker buildId={b.id} />}
+                {(b.status === 'paid' || b.status === 'live') && (
+                  <>
+                    <p className="text-xs text-green-300 mt-2 inline-flex items-center gap-1.5">
+                      <Check size={12} /> Paid{b.sale_amount ? ` (£${b.sale_amount.toLocaleString()})` : ''}. Client added to newsletter.
+                    </p>
+                    <HookupChecklist buildId={b.id} />
+                  </>
+                )}
+
+                <div className="flex items-center gap-2 flex-wrap mt-auto pt-3">
                   {(b.status === 'requested' || b.status === 'approved' || b.status === 'building') && (
-                    <span className="text-xs text-amber-400 px-3 py-1.5">Building...</span>
+                    <span className="text-xs text-amber-400 px-1 py-1.5">Building...</span>
                   )}
                   {b.status === 'built' && (
                     <>
@@ -424,24 +472,24 @@ export default function WebsitesPage() {
                     </button>
                   )}
                   {b.status === 'sent' && (
-                    <span className="inline-flex items-center gap-1 text-xs text-green-400 px-3 py-1.5">
+                    <span className="inline-flex items-center gap-1 text-xs text-green-400 px-1 py-1.5">
                       <Check size={12} /> With caller
                     </span>
                   )}
                   {(b.status === 'paid' || b.status === 'live') && (
-                    <span className="inline-flex items-center gap-1 text-xs text-green-300 px-3 py-1.5">
+                    <span className="inline-flex items-center gap-1 text-xs text-green-300 px-1 py-1.5">
                       <Check size={12} /> {b.status === 'live' ? 'Live' : 'Paid'}
                     </span>
                   )}
                   {b.status === 'rejected' && (
-                    <span className="text-xs text-red-400 px-3 py-1.5">Rejected</span>
+                    <span className="text-xs text-red-400 px-1 py-1.5">Rejected</span>
                   )}
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Request Modal */}
       {showModal && (

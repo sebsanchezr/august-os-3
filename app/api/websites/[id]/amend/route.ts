@@ -121,6 +121,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         brief_talking_points: result.design.sales_brief.talking_points,
         brief_objection_prep: result.design.sales_brief.objection_prep,
         build_error: result.deployError,
+        quality_passed: result.quality.passed,
+        quality_warnings: result.quality.warnings,
         revision: nextRevision,
         amend_history: nextHistory,
         updated_at: new Date().toISOString(),
@@ -132,18 +134,21 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     if (updateErr) throw updateErr
 
     void postDiscord(
-      result.deployed
+      !result.quality.passed
+        ? `Amended website needs review (v${nextRevision}): ${data.business_name}, requested by ${amendedBy ?? 'unknown'}`
+        : result.deployed
         ? `Website amended (v${nextRevision}): ${data.business_name}, requested by ${amendedBy ?? 'unknown'}`
         : `Website amend had issues (v${nextRevision}): ${data.business_name}, requested by ${amendedBy ?? 'unknown'}`,
       [{
-        title: `${result.deployed ? 'Amended' : 'Amend issue'} v${nextRevision}: ${data.business_name}`,
-        color: result.deployed ? 0x22C55E : 0xF59E0B,
+        title: !result.quality.passed ? `Needs review v${nextRevision}: ${data.business_name}` : `${result.deployed ? 'Amended' : 'Amend issue'} v${nextRevision}: ${data.business_name}`,
+        color: !result.quality.passed ? 0xF59E0B : result.deployed ? 0x22C55E : 0xF59E0B,
         fields: [
           { name: 'Changes requested', value: notes, inline: false },
           ...(data.site_url ? [{ name: `Live link (v${nextRevision})`, value: data.site_url, inline: false }] : []),
           ...(r.phone ? [{ name: 'Real phone found', value: r.phone, inline: true }] : []),
           ...(r.rating != null ? [{ name: 'Google rating', value: `${r.rating} (${r.review_count ?? 0} reviews)`, inline: true }] : []),
           ...(!result.deployed ? [{ name: 'Deploy status', value: result.deployError || 'Site did not deploy, check logs', inline: false }] : []),
+          ...(!result.quality.passed ? [{ name: 'Needs review', value: result.quality.warnings.map(w => `- ${w}`).join('\n'), inline: false }] : []),
         ],
         footer: { text: 'August OS Websites' },
         timestamp: new Date().toISOString(),
