@@ -1,7 +1,7 @@
 // One Sonnet call for the creative copy + design direction of the demo site,
 // plus the sales call brief. Deliberately does NOT generate anything a
 // prospect could catch as fabricated on the call: ratings, review counts,
-// accreditation body names, testimonials and the founder block are all
+// accreditation body names, testimonials, stats and the founder block are all
 // assembled deterministically in index.ts from real research/form data, never
 // from the model. This function only ever writes marketing copy.
 
@@ -10,14 +10,16 @@ import type { BusinessResearch } from './research'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 const SONNET = 'claude-sonnet-5'
-const STYLE_RULES = 'Never use em-dashes or en-dashes, use commas or full stops instead. No hype words (best, number one, unbeatable). British spelling. No exclamation-mark spam.'
 
 export type SiteDesign = {
   niche_category: 'trades' | 'hospitality' | 'professional' | 'beauty_wellness' | 'retail' | 'generic'
   palette: { primary: string; accent: string; ink: string; surface: string; surface_alt: string }
   emergency_strip: { enabled: boolean; text: string }
+  eyebrow: string
   hero_headline: string
   hero_subhead: string
+  hero_points: string[]
+  about_heading: string
   about: string
   why_choose: { title: string; description: string }[]
   services: { name: string; description: string }[]
@@ -25,6 +27,7 @@ export type SiteDesign = {
   faqs: { q: string; a: string }[]
   trust_badges: string[]
   service_areas: string[]
+  cta_headline: string
   cta_text: string
   image_query: string
   sales_brief: {
@@ -41,31 +44,37 @@ function extractText(msg: Anthropic.Message): string {
 
 function fallbackDesign(businessName: string, niche: string, services: string[], city: string | null): SiteDesign {
   const svc = services.length ? services : ['General enquiries']
+  const where = city || 'the local area'
   return {
     niche_category: 'generic',
-    palette: { primary: '#1a3d5c', accent: '#c8102e', ink: '#14212e', surface: '#ffffff', surface_alt: '#f4f6f8' },
+    palette: { primary: '#12212e', accent: '#e0651a', ink: '#14212e', surface: '#ffffff', surface_alt: '#f5f3ef' },
     emergency_strip: { enabled: false, text: '' },
-    hero_headline: `Trusted ${niche || 'local'} experts`,
-    hero_subhead: `${businessName} delivers reliable, local service you can count on.`,
-    about: `${businessName} is a local, trusted name in ${niche || 'the trade'}, known for quality work and straightforward service.`,
+    eyebrow: `${niche || 'Local'} specialists · ${where}`,
+    hero_headline: `Built properly. First time.`,
+    hero_subhead: `${businessName} handles ${niche || 'the work'} across ${where}, with clear pricing and no surprises.`,
+    hero_points: ['Free quotes', 'Fully insured', 'Local team'],
+    about_heading: 'A local firm that turns up',
+    about: `${businessName} works across ${where}. Straight answers, tidy work, and a price agreed before anything starts.`,
     why_choose: [
-      { title: 'Local and reliable', description: 'Based in the area and easy to reach when you need us.' },
-      { title: 'Straightforward pricing', description: 'Clear quotes with no hidden extras.' },
-      { title: 'Fast response', description: 'We get back to enquiries quickly.' },
+      { title: 'Straight pricing', description: 'A fixed quote before we start. What we say is what you pay.' },
+      { title: 'On the tools daily', description: 'Local team, working in your area every week.' },
+      { title: 'Tidy finish', description: 'Site cleared, waste taken away, nothing left behind.' },
+      { title: 'Quick to answer', description: 'Calls picked up, quotes back fast.' },
     ],
-    services: svc.map(s => ({ name: s, description: `Professional ${s.toLowerCase()} done right, every time.` })),
+    services: svc.map(s => ({ name: s, description: `${s} handled end to end, priced up front.` })),
     process: [
-      { step: 1, title: 'Get in touch', description: 'Call or send your details and tell us what you need.' },
-      { step: 2, title: 'Free quote', description: 'We give you a clear, no-obligation quote.' },
-      { step: 3, title: 'We get to work', description: 'Work carried out to a high standard, on schedule.' },
-      { step: 4, title: 'Job done', description: 'Tidy finish and a result you are happy with.' },
+      { step: 1, title: 'Call or message', description: 'Tell us what is going on. Photos help.' },
+      { step: 2, title: 'We take a look', description: 'A proper inspection, then a fixed written quote.' },
+      { step: 3, title: 'The work gets done', description: 'Booked in, turned up for, finished on schedule.' },
+      { step: 4, title: 'Signed off', description: 'We walk it with you before we leave.' },
     ],
     faqs: [
-      { q: 'What areas do you cover?', a: `${businessName} covers ${city || 'the local area'} and nearby.` },
-      { q: 'Do you offer free quotes?', a: 'Yes, get in touch for a free, no-obligation quote.' },
+      { q: 'What areas do you cover?', a: `${where} and the surrounding area. Ask if you are not sure.` },
+      { q: 'Do you charge for quotes?', a: 'No. Quotes are free and there is no obligation.' },
     ],
-    trust_badges: ['Local team', 'Free quotes', 'Fast response'],
+    trust_badges: ['Free quotes', 'Fully insured', 'Local team', 'Fast response'],
     service_areas: city ? [city] : [],
+    cta_headline: 'Get a price this week',
     cta_text: 'Get a Free Quote',
     image_query: niche || 'business',
     sales_brief: {
@@ -88,9 +97,8 @@ export async function generateSiteDesign(input: {
   amend?: { notes: string; previousDesign: SiteDesign }
 }): Promise<SiteDesign> {
   // Backfill defaults first, then layer the previous version on top — an
-  // amend on a pre-v2 build has an old, narrower site_design shape (no
-  // why_choose/process/faqs/trust_badges/etc), so using it as the fallback
-  // directly would leave those keys undefined instead of falling back.
+  // amend on an older build has a narrower site_design shape, so using it as
+  // the fallback directly would leave newer keys undefined.
   const fallback = input.amend
     ? { ...fallbackDesign(input.businessName, input.niche, input.services, input.city), ...input.amend.previousDesign }
     : fallbackDesign(input.businessName, input.niche, input.services, input.city)
@@ -105,52 +113,81 @@ export async function generateSiteDesign(input: {
     r.founded_year ? `Founded: ${r.founded_year}` : null,
     r.years_active ? `Years active: ${r.years_active}` : null,
     r.notable_facts.length ? `Notable facts found: ${r.notable_facts.join('; ')}` : null,
-    r.rating != null ? `Google rating: ${r.rating} (${r.review_count ?? 0} reviews) — DO NOT restate this number yourself, it is rendered separately from real data` : 'No Google rating found, this business may be new or unrated',
+    r.rating != null ? `Google rating: ${r.rating} (${r.review_count ?? 0} reviews). DO NOT restate this number in your copy, it is rendered separately from real data.` : 'No Google rating found, this business may be new or unrated.',
   ].filter(Boolean).join('\n') || 'No usable research found, work from the business details only.'
 
   const amendBlock = input.amend
-    ? `\nTHIS IS A REVISION of a version already generated. The previous version, in the exact same JSON shape, was:\n\`\`\`json\n${JSON.stringify(input.amend.previousDesign, null, 2)}\n\`\`\`\nThe caller reviewing it requested these changes:\n"${input.amend.notes}"\n\nApply ONLY the requested changes. Keep everything else (wording, palette, structure) the same as the previous version unless the request implies it should change too.\n`
+    ? `\nTHIS IS A REVISION of a version already generated. The previous version, in the exact same JSON shape, was:\n\`\`\`json\n${JSON.stringify(input.amend.previousDesign, null, 2)}\n\`\`\`\nThe caller reviewing it requested these changes:\n"${input.amend.notes}"\n\nApply the requested changes. Keep what is working. If the request is about quality or feel generally ("make it better", "more premium"), rewrite the copy properly rather than making token edits.\n`
     : ''
 
-  const prompt = `You are writing the copy for a demo website AND a sales call brief, for a cold outreach agency pitching a local business a new website. ${STYLE_RULES}
+  const prompt = `You are a senior conversion copywriter for a high-end design studio. You are writing the copy for a website that will be shown live to this business owner on a sales call, to convince them to pay two thousand pounds for it. The copy is the difference between "that's nice" and "how do I pay".
 ${amendBlock}
-BUSINESS DETAILS
+BUSINESS
 Name: ${input.businessName}
-Niche/trade: ${input.niche}
-City: ${input.city || 'unknown'}
+Trade: ${input.niche}
+Town: ${input.city || 'unknown'}
 Service area: ${input.serviceArea || 'unknown'}
-Services offered: ${input.services.join(', ') || 'unknown, infer 3 to 5 typical services for this niche'}
-Owner name: ${input.ownerName || 'unknown'}
+Services: ${input.services.join(', ') || 'unknown, infer 4 to 6 typical services for this trade'}
+Owner: ${input.ownerName || 'unknown'}
 Caller notes: ${input.notes || 'none'}
 
-RESEARCH (only source of truth for facts, do not invent anything beyond this)
+RESEARCH (the only source of truth for facts)
 ${researchBlock}
 
-CRITICAL RULE: Never invent a star rating, a review count, a specific testimonial quote, a named accreditation body (NFRC, TrustMark, Which? Trusted Trader, Checkatrade, Gas Safe etc), or a specific guarantee period (e.g. "25 year guarantee"). Those are rendered separately from verified data only. If you don't have real facts for something, write generically (e.g. "Free, no-obligation quotes" not "Rated 4.9 on Google").
+## How to write
 
-This is a light-theme website (UK trades/local business convention, never dark). Pick a "trades" (roofing, plumbing, electrical, building, landscaping), "hospitality" (restaurant, cafe, bar), "professional" (law, accounting, consulting), "beauty_wellness" (salon, spa, gym), "retail", or "generic" niche_category, and write:
+Write like a confident British tradesperson who is good at their job and does not oversell. Short sentences. Concrete nouns. Specific detail beats adjectives.
 
-1. palette: primary (dark navy/brand colour for header/text accents), accent (high-contrast CTA colour, warm and premium, not generic blue unless it fits), ink (near-black body text colour), surface (white or near-white background), surface_alt (a very light tint for alternating sections). All hex.
-2. emergency_strip: enabled=true only for niches with genuine emergencies (roofing, plumbing, electrical, locksmith, pest control), with a short urgent text line, else enabled=false.
-3. hero_headline (4 to 8 words, benefit or trust led) and hero_subhead (one sentence, max 20 words, names the trade and town, can reference founded/years_active if present in research).
-4. about (2 to 3 sentences, weave in any real research facts).
-5. why_choose: 4 short benefit tiles (title 2-4 words, description max 14 words), grounded in what a customer actually cares about for this niche.
-6. services: one object per service listed above (or invent 3 to 5 typical ones if none given), each with a name and a max 16 word benefit-led description.
-7. process: exactly 4 steps a customer goes through from enquiry to job done, step-numbered.
-8. faqs: 5 short, realistic customer questions with concise answers.
-9. trust_badges: 3 to 4 short generic trust phrases (e.g. "Local & reliable", "Free, no-obligation quotes", "Fast response times"). No certifications, no numbers you cannot back up.
-10. service_areas: 8 to 15 real place names plausibly near "${input.city || input.serviceArea || 'the business'}" in the UK (nearby towns/districts), for a "areas we cover" section.
-11. cta_text (2 to 4 words for the main button).
-12. image_query (2 to 3 words for a stock photo search fallback, only used if no real photos exist).
-13. sales_brief: summary (2 sentences on who they are and the strongest angle for why they need a better web presence), talking_points (3 bullets specific to this business using research facts if found), objection_prep (2 "if they say X, respond Y" bullets for this niche's common objections).
+BANNED, these are the exact phrases that make a site look cheap and generic:
+"quality workmanship", "built to last", "peace of mind", "second to none", "we pride ourselves", "customer satisfaction", "attention to detail", "professional service", "your trusted local", "no job too big or small", "done right, every time", "high standard", "years of experience" (unless you have the real number), "reliable and trustworthy", "competitive prices".
 
-Return ONLY valid JSON, no markdown fences, in exactly this shape:
-{"niche_category": "...", "palette": {"primary": "#...", "accent": "#...", "ink": "#...", "surface": "#...", "surface_alt": "#..."}, "emergency_strip": {"enabled": true, "text": "..."}, "hero_headline": "...", "hero_subhead": "...", "about": "...", "why_choose": [{"title": "...", "description": "..."}], "services": [{"name": "...", "description": "..."}], "process": [{"step": 1, "title": "...", "description": "..."}], "faqs": [{"q": "...", "a": "..."}], "trust_badges": ["...", "..."], "service_areas": ["...", "..."], "cta_text": "...", "image_query": "...", "sales_brief": {"summary": "...", "talking_points": ["...", "...", "..."], "objection_prep": ["...", "..."]}}`
+Never use em-dashes or en-dashes. British spelling. No exclamation marks. No hype words (best, leading, premier, unbeatable, number one).
+
+Bad, generic, unusable:
+  "Premium workmanship. Every job finished to a high, lasting standard."
+Good, specific, sellable:
+  "Fixed quotes. The price we write down is the price you pay, even if the job takes longer than we thought."
+
+Bad: "Fast response. Enquiries answered quickly."
+Good: "Leaks answered same day. Everything else quoted within 48 hours."
+
+Every line should say something a competitor could not copy and paste onto their own site.
+
+## Facts rule, this is critical
+
+Never invent: a star rating, a review count, a testimonial, a named accreditation body (NFRC, TrustMark, Which? Trusted Trader, Checkatrade, Gas Safe), a guarantee period, an insurance figure, a number of jobs completed, or a founding year. Those are rendered separately from verified data only. If you do not have the real fact, write copy that does not need it. Never write "25 years experience" or "500+ jobs" unless that exact fact appears in the research above.
+
+## What to produce
+
+This is a light, editorial, high-design website. Sections do not all look alike.
+
+1. niche_category: one of "trades", "hospitality", "professional", "beauty_wellness", "retail", "generic".
+2. palette: primary (deep, rich brand colour used for dark sections, NOT a generic navy unless it genuinely fits), accent (a confident high-contrast colour for buttons and highlights, pick something with personality suited to the trade), ink (near-black body text), surface (white or a warm off-white), surface_alt (a soft tinted background for alternating sections). All hex. Make it feel considered and expensive, not default-bootstrap-blue.
+3. emergency_strip: enabled true only for trades with genuine emergencies (roofing, plumbing, electrical, locksmith, pest control, glazing), with a short urgent line. Otherwise enabled false and text "".
+4. eyebrow: 3 to 6 words above the headline, e.g. "Roofing specialists · Barking".
+5. hero_headline: 3 to 7 words. Punchy, confident, a bit of attitude. It sits at 80px on screen so it must be short. Not a description of the company. Think headline, not sentence.
+6. hero_subhead: one sentence, max 22 words, naming the trade and town and the single strongest reason to call.
+7. hero_points: exactly 3 very short proof points (2 to 4 words each) for a row under the hero.
+8. about_heading: 3 to 6 words, editorial, not "About us".
+9. about: 2 to 3 short sentences with a real point of view. No filler.
+10. why_choose: exactly 4 items. title 2 to 4 words, description one specific sentence max 16 words. Each must make a concrete promise, not a vague virtue.
+11. services: one per service listed above (or 4 to 6 typical ones), name plus one specific sentence max 15 words.
+12. process: exactly 4 steps from first contact to job finished. title 2 to 4 words, description max 12 words, written plainly.
+13. faqs: 5 real questions a customer of this trade actually asks, with straight answers, max 30 words each.
+14. trust_badges: exactly 4 short phrases, no invented certifications or numbers.
+15. service_areas: 10 to 16 real UK place names genuinely near "${input.city || input.serviceArea || 'the business'}".
+16. cta_headline: 4 to 7 words for the closing section. Direct and human.
+17. cta_text: 2 to 4 words for buttons.
+18. image_query: 2 to 3 words for a stock photo fallback.
+19. sales_brief: summary (2 sentences on who they are and the sharpest angle for why they need this site), talking_points (3 bullets specific to this business), objection_prep (2 "if they say X, say Y" bullets).
+
+Return ONLY valid JSON, no markdown fences, exactly this shape:
+{"niche_category":"...","palette":{"primary":"#...","accent":"#...","ink":"#...","surface":"#...","surface_alt":"#..."},"emergency_strip":{"enabled":false,"text":""},"eyebrow":"...","hero_headline":"...","hero_subhead":"...","hero_points":["...","...","..."],"about_heading":"...","about":"...","why_choose":[{"title":"...","description":"..."}],"services":[{"name":"...","description":"..."}],"process":[{"step":1,"title":"...","description":"..."}],"faqs":[{"q":"...","a":"..."}],"trust_badges":["...","...","...","..."],"service_areas":["..."],"cta_headline":"...","cta_text":"...","image_query":"...","sales_brief":{"summary":"...","talking_points":["...","...","..."],"objection_prep":["...","..."]}}`
 
   try {
     const msg = await client.messages.create({
       model: SONNET,
-      max_tokens: 5000,
+      max_tokens: 6000,
       messages: [{ role: 'user', content: prompt }],
     })
     const raw = extractText(msg).trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')
@@ -159,25 +196,31 @@ Return ONLY valid JSON, no markdown fences, in exactly this shape:
       console.error('[design.ts] response missing hero_headline/palette, stop_reason:', msg.stop_reason, 'keys:', Object.keys(parsed))
       return fallback
     }
+    const arr = <T,>(v: unknown, fb: T[], max: number): T[] =>
+      Array.isArray(v) && v.length ? (v as T[]).slice(0, max) : fb
     return {
       niche_category: parsed.niche_category || 'generic',
       palette: { ...fallback.palette, ...parsed.palette },
       emergency_strip: parsed.emergency_strip?.text ? parsed.emergency_strip : { enabled: false, text: '' },
+      eyebrow: parsed.eyebrow || fallback.eyebrow,
       hero_headline: parsed.hero_headline,
       hero_subhead: parsed.hero_subhead || fallback.hero_subhead,
+      hero_points: arr(parsed.hero_points, fallback.hero_points, 3),
+      about_heading: parsed.about_heading || fallback.about_heading,
       about: parsed.about || fallback.about,
-      why_choose: Array.isArray(parsed.why_choose) && parsed.why_choose.length ? parsed.why_choose.slice(0, 6) : fallback.why_choose,
-      services: Array.isArray(parsed.services) && parsed.services.length ? parsed.services : fallback.services,
-      process: Array.isArray(parsed.process) && parsed.process.length ? parsed.process.slice(0, 4) : fallback.process,
-      faqs: Array.isArray(parsed.faqs) && parsed.faqs.length ? parsed.faqs.slice(0, 6) : fallback.faqs,
-      trust_badges: Array.isArray(parsed.trust_badges) && parsed.trust_badges.length ? parsed.trust_badges.slice(0, 4) : fallback.trust_badges,
-      service_areas: Array.isArray(parsed.service_areas) && parsed.service_areas.length ? parsed.service_areas.slice(0, 15) : fallback.service_areas,
+      why_choose: arr(parsed.why_choose, fallback.why_choose, 4),
+      services: arr(parsed.services, fallback.services, 8),
+      process: arr(parsed.process, fallback.process, 4),
+      faqs: arr(parsed.faqs, fallback.faqs, 6),
+      trust_badges: arr(parsed.trust_badges, fallback.trust_badges, 4),
+      service_areas: arr(parsed.service_areas, fallback.service_areas, 16),
+      cta_headline: parsed.cta_headline || fallback.cta_headline,
       cta_text: parsed.cta_text || fallback.cta_text,
       image_query: parsed.image_query || fallback.image_query,
       sales_brief: {
         summary: parsed.sales_brief?.summary || fallback.sales_brief.summary,
-        talking_points: Array.isArray(parsed.sales_brief?.talking_points) ? parsed.sales_brief.talking_points.slice(0, 4) : fallback.sales_brief.talking_points,
-        objection_prep: Array.isArray(parsed.sales_brief?.objection_prep) ? parsed.sales_brief.objection_prep.slice(0, 3) : fallback.sales_brief.objection_prep,
+        talking_points: arr(parsed.sales_brief?.talking_points, fallback.sales_brief.talking_points, 4),
+        objection_prep: arr(parsed.sales_brief?.objection_prep, fallback.sales_brief.objection_prep, 3),
       },
     }
   } catch (err) {

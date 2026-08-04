@@ -17,6 +17,7 @@ const HAIKU = 'claude-haiku-4-5-20251001'
 const APIFY_MAPS_ACTOR = 'compass~crawler-google-places'
 
 export type BusinessResearch = {
+  brand_logo_url: string | null
   confirmed_name: string | null
   phone: string | null
   address: string | null
@@ -35,6 +36,7 @@ export type BusinessResearch = {
 }
 
 const EMPTY: BusinessResearch = {
+  brand_logo_url: null,
   confirmed_name: null,
   phone: null,
   address: null,
@@ -112,6 +114,46 @@ async function runApifyPlaces(input: Record<string, unknown>): Promise<Record<st
   }
 }
 
+// Google Business photo sets almost always mix the company's logo/graphic in
+// with real job photos. Left alone that logo ends up as a "recent work" tile
+// (which looks broken) while the header falls back to a text wordmark. One
+// cheap Haiku vision pass sorts them, so the real logo lands in the header
+// and the gallery is only actual work.
+async function classifyPhotos(urls: string[]): Promise<{ logo: string | null; photos: string[] }> {
+  if (!urls.length) return { logo: null, photos: [] }
+  if (!process.env.ANTHROPIC_API_KEY) return { logo: null, photos: urls }
+
+  try {
+    const content: Anthropic.ContentBlockParam[] = []
+    urls.forEach((url, i) => {
+      content.push({ type: 'text', text: `Image ${i}:` })
+      content.push({ type: 'image', source: { type: 'url', url } })
+    })
+    content.push({
+      type: 'text',
+      text: `These are photos from a business's Google listing. For each image, decide if it is "logo" (a logo, wordmark, flat graphic, poster, text-on-plain-background, or advert) or "photo" (a real photograph of work, premises, vehicles, or people).
+
+Return ONLY valid JSON, no markdown fences: {"types": ["logo" or "photo", ...]} with exactly ${urls.length} entries in image order.`,
+    })
+
+    const msg = await client.messages.create({
+      model: HAIKU,
+      max_tokens: 300,
+      messages: [{ role: 'user', content }],
+    })
+    const raw = extractText(msg).trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')
+    const types: unknown = JSON.parse(raw).types
+    if (!Array.isArray(types)) return { logo: null, photos: urls }
+
+    const logo = urls.find((_, i) => types[i] === 'logo') ?? null
+    const photos = urls.filter((_, i) => types[i] !== 'logo')
+    // If the model called everything a logo, trust the photos over the model.
+    return photos.length ? { logo, photos } : { logo, photos: urls }
+  } catch {
+    return { logo: null, photos: urls }
+  }
+}
+
 async function researchFromGoogle(businessName: string, city: string | null, googleUrl: string | null): Promise<Partial<BusinessResearch>> {
   const urlFallback = googleUrl && isMapsUrl(googleUrl) ? parseMapsUrl(googleUrl) : { address: null, city: null, postcode: null }
 
@@ -136,10 +178,11 @@ async function researchFromGoogle(businessName: string, city: string | null, goo
   const rawPhotos: string[] = (place.imageUrls as string[] | undefined)
     || ((place.images as { url?: string }[] | undefined)?.map(i => i.url).filter(Boolean) as string[] | undefined)
     || []
-  const photos = rawPhotos
+  const candidates = rawPhotos
     .filter(u => typeof u === 'string' && u.includes('lh3.googleusercontent.com'))
     .slice(0, 8)
     .map(u => resizePhoto(u, '=w1200-h900-k-no'))
+  const { logo: brand_logo_url, photos } = await classifyPhotos(candidates)
 
   const rawReviews = (place.reviews as { text?: string; stars?: number }[] | undefined) || []
   const review_texts = rawReviews.map(r => r.text).filter((t): t is string => !!t && t.length > 10).slice(0, 5)
@@ -156,6 +199,7 @@ async function researchFromGoogle(businessName: string, city: string | null, goo
     categories: (place.categories as string[] | undefined) || [],
     has_opening_hours: !!place.openingHours,
     photos,
+    brand_logo_url,
   }
 }
 
