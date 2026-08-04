@@ -623,7 +623,7 @@ export default function WebsitesPage() {
                   disabled={submitting}
                   className="flex-1 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors"
                 >
-                  {submitting ? 'Building site... (up to a minute)' : 'Request website'}
+                  {submitting ? 'Building site... (up to 2 minutes, real research + photos)' : 'Request website'}
                 </button>
               </div>
             </form>
@@ -710,7 +710,7 @@ export default function WebsitesPage() {
                   disabled={amendSubmitting}
                   className="flex-1 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors"
                 >
-                  {amendSubmitting ? 'Rebuilding... (up to a minute)' : 'Send amend'}
+                  {amendSubmitting ? 'Rebuilding... (up to 2 minutes)' : 'Send amend'}
                 </button>
               </div>
             </div>

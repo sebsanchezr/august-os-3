@@ -3,7 +3,9 @@ import { createSupabaseAdmin, createSupabaseServer } from '@/lib/supabase-server
 import { buildAndDeploySite } from '@/lib/site-builder'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 60
+// Apify's Google Places scrape can take 30-90s on its own; Fluid compute on
+// this project makes 300s the Hobby-plan max/default, plenty of headroom.
+export const maxDuration = 280
 
 // Postgres raises 42P01 (undefined_table) when migration 034 hasn't run yet.
 const MISSING_TABLE_CODE = '42P01'
@@ -115,7 +117,9 @@ export async function POST(req: NextRequest) {
 
     // Build starts immediately, no manual "approve to start" step. Runs inline
     // so the response only returns once the site is live (or has failed) and
-    // the caller has a link ready to open before the call.
+    // the caller has a link ready to open before the call. Fluid compute on
+    // this project makes 300s the Hobby-plan duration, which comfortably fits
+    // the Apify scrape (30-90s) + design call + deploy.
     const result = await buildAndDeploySite({
       businessName: inserted.business_name,
       niche: inserted.niche,
@@ -127,15 +131,21 @@ export async function POST(req: NextRequest) {
       notes: inserted.notes,
       googleUrl: inserted.google_url,
       existingSiteUrl: inserted.existing_site_url,
+      buildId: inserted.id,
     })
 
+    const r = result.research
     const { data, error: updateErr } = await supabase
       .from('website_builds')
       .update({
         status: 'built',
         site_url: result.siteUrl,
-        logo_url: result.logoUrl,
+        logo_url: r.logo_url,
         site_design: result.design,
+        research_data: r,
+        // Real data found by research fills in anything the caller left blank.
+        phone: inserted.phone || r.phone,
+        city: inserted.city || r.city,
         brief_summary: result.design.sales_brief.summary,
         brief_talking_points: result.design.sales_brief.talking_points,
         brief_objection_prep: result.design.sales_brief.objection_prep,
@@ -151,6 +161,8 @@ export async function POST(req: NextRequest) {
     const brief = result.design.sales_brief
     const fields = [
       ...(finalRecord.site_url ? [{ name: 'Demo site', value: finalRecord.site_url, inline: false }] : []),
+      ...(r.phone ? [{ name: 'Real phone found', value: r.phone, inline: true }] : []),
+      ...(r.rating != null ? [{ name: 'Google rating', value: `${r.rating} (${r.review_count ?? 0} reviews)`, inline: true }] : []),
       { name: 'Sales brief', value: brief.summary, inline: false },
       ...(brief.talking_points.length ? [{ name: 'Talking points', value: brief.talking_points.map((t: string) => `- ${t}`).join('\n'), inline: false }] : []),
       ...(brief.objection_prep.length ? [{ name: 'Objection prep', value: brief.objection_prep.map((t: string) => `- ${t}`).join('\n'), inline: false }] : []),

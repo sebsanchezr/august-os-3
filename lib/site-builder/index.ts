@@ -1,9 +1,10 @@
-import { researchBusiness } from './research'
+import { researchBusiness, type BusinessResearch } from './research'
 import { generateSiteDesign, type SiteDesign } from './design'
 import { renderSiteHtml } from './template'
 import { deployStaticSite } from './deploy'
 
 export type { SiteDesign } from './design'
+export type { BusinessResearch } from './research'
 
 export type BuildSiteInput = {
   businessName: string
@@ -16,10 +17,13 @@ export type BuildSiteInput = {
   notes: string | null
   googleUrl: string | null
   existingSiteUrl: string | null
+  buildId: string
   // Present only when this is a re-build off caller feedback on an existing
-  // build. Skips research (already have it) and asks the model to revise the
-  // prior design in place rather than start over.
-  amend?: { notes: string; previousDesign: SiteDesign; previousLogoUrl: string | null }
+  // build. When previousResearch is available it's reused (no repeat Apify
+  // cost); when null (older v1 rows with nothing saved) research re-runs, so
+  // an amend also doubles as the upgrade path for pre-v2 builds. Either way
+  // the model revises the prior design in place rather than starting over.
+  amend?: { notes: string; previousDesign: SiteDesign; previousResearch: BusinessResearch | null }
 }
 
 export type BuildSiteResult = {
@@ -27,23 +31,41 @@ export type BuildSiteResult = {
   deployed: boolean
   deployError: string | null
   design: SiteDesign
-  logoUrl: string | null
+  research: BusinessResearch
 }
 
-function slugify(businessName: string): string {
+function slugify(businessName: string, buildId: string): string {
   const base = businessName
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 40) || 'site'
-  const suffix = Date.now().toString(36).slice(-5)
-  return `${base}-${suffix}`
+  return `${base}-${buildId.slice(0, 8)}`
+}
+
+// Testimonials, founder credentials and the trust bar (rating/review count)
+// are assembled here from real data only, never by the model, so nothing a
+// prospect could catch as fabricated on the call ever reaches the page.
+function buildFounder(ownerName: string | null, research: BusinessResearch) {
+  if (!ownerName) return null
+  return {
+    name: ownerName,
+    role: 'Owner',
+    credentials: research.years_active ? `${research.years_active} in the trade` : null,
+  }
+}
+
+function buildTestimonials(research: BusinessResearch, city: string | null) {
+  return research.review_texts.map(text => ({
+    quote: text.length > 220 ? `${text.slice(0, 217)}...` : text,
+    location: research.city || city || '',
+    source: 'Google review',
+  }))
 }
 
 export async function buildAndDeploySite(input: BuildSiteInput): Promise<BuildSiteResult> {
-  const research = input.amend
-    ? { founded_year: null, years_active: null, location_detail: null, notable_facts: [], logo_url: input.amend.previousLogoUrl }
-    : await researchBusiness(input.businessName, [input.existingSiteUrl, input.googleUrl])
+  const research = input.amend?.previousResearch
+    ?? await researchBusiness(input.businessName, input.city, input.googleUrl, input.existingSiteUrl)
 
   const design = await generateSiteDesign({
     businessName: input.businessName,
@@ -57,17 +79,25 @@ export async function buildAndDeploySite(input: BuildSiteInput): Promise<BuildSi
     amend: input.amend ? { notes: input.amend.notes, previousDesign: input.amend.previousDesign } : undefined,
   })
 
+  const phone = research.phone || input.phone
+
   const html = renderSiteHtml({
-    businessName: input.businessName,
+    businessName: research.confirmed_name || input.businessName,
     niche: input.niche,
-    city: input.city,
-    serviceArea: input.serviceArea,
-    phone: input.phone,
+    city: research.city || input.city,
+    phone,
+    address: research.address,
+    photos: research.photos,
     logoUrl: research.logo_url,
+    rating: research.rating,
+    reviewCount: research.review_count,
+    testimonials: buildTestimonials(research, input.city),
+    founder: buildFounder(input.ownerName, research),
+    buildId: input.buildId,
     design,
   })
 
-  const slug = slugify(input.businessName)
+  const slug = slugify(input.businessName, input.buildId)
   const deploy = await deployStaticSite(slug, html)
 
   return {
@@ -75,6 +105,6 @@ export async function buildAndDeploySite(input: BuildSiteInput): Promise<BuildSi
     deployed: deploy.deployed,
     deployError: deploy.error || null,
     design,
-    logoUrl: research.logo_url,
+    research,
   }
 }

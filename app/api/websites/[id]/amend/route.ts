@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdmin, createSupabaseServer } from '@/lib/supabase-server'
-import { buildAndDeploySite, type SiteDesign } from '@/lib/site-builder'
+import { buildAndDeploySite, type SiteDesign, type BusinessResearch } from '@/lib/site-builder'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 60
+export const maxDuration = 280
 
 const MISSING_TABLE_CODE = '42P01'
 
@@ -74,6 +74,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     const nextRevision = (current.revision ?? 1) + 1
+    // Pre-v2 rows (like the original Peak Roofer build) have no research_data
+    // saved. Amending one re-runs real research (Apify) as part of upgrading
+    // it, rather than reusing whatever the old pipeline produced (nothing).
+    const isUpgradeFromV1 = !current.research_data
 
     const result = await buildAndDeploySite({
       businessName: current.business_name,
@@ -86,28 +90,33 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       notes: current.notes,
       googleUrl: current.google_url,
       existingSiteUrl: current.existing_site_url,
+      buildId: current.id,
       amend: {
         notes,
         previousDesign: current.site_design as SiteDesign,
-        previousLogoUrl: current.logo_url,
+        previousResearch: (current.research_data as BusinessResearch | null) ?? null,
       },
     })
 
     const historyEntry = {
       revision: nextRevision,
-      notes,
+      notes: isUpgradeFromV1 ? `${notes} (upgraded to v2 engine: real research + photos)` : notes,
       requested_by: amendedBy ?? 'unknown',
       requested_at: new Date().toISOString(),
     }
     const nextHistory = Array.isArray(current.amend_history) ? [...current.amend_history, historyEntry] : [historyEntry]
 
+    const r = result.research
     const { data, error: updateErr } = await supabase
       .from('website_builds')
       .update({
         status: 'built',
         site_url: result.siteUrl,
-        logo_url: result.logoUrl,
+        logo_url: r.logo_url,
         site_design: result.design,
+        research_data: r,
+        phone: current.phone || r.phone,
+        city: current.city || r.city,
         brief_summary: result.design.sales_brief.summary,
         brief_talking_points: result.design.sales_brief.talking_points,
         brief_objection_prep: result.design.sales_brief.objection_prep,
@@ -132,6 +141,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         fields: [
           { name: 'Changes requested', value: notes, inline: false },
           ...(data.site_url ? [{ name: `Live link (v${nextRevision})`, value: data.site_url, inline: false }] : []),
+          ...(r.phone ? [{ name: 'Real phone found', value: r.phone, inline: true }] : []),
+          ...(r.rating != null ? [{ name: 'Google rating', value: `${r.rating} (${r.review_count ?? 0} reviews)`, inline: true }] : []),
           ...(!result.deployed ? [{ name: 'Deploy status', value: result.deployError || 'Site did not deploy, check logs', inline: false }] : []),
         ],
         footer: { text: 'August OS Websites' },

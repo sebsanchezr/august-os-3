@@ -35,7 +35,10 @@ export async function middleware(request: NextRequest) {
   const isWebhookOrPortal =
     path.startsWith('/api/webhooks/') ||
     path.startsWith('/welcome/') ||
-    path.startsWith('/api/onboarding/portal/')
+    path.startsWith('/api/onboarding/portal/') ||
+    // Public lead-capture form on generated demo sites, each on its own
+    // throwaway Vercel domain (cross-origin, no Supabase session possible).
+    path.startsWith('/api/website-leads')
   // Vercel Cron has no Supabase session either; the route itself checks
   // CRON_SECRET against the Authorization header Vercel sends.
   const isCronEndpoint = path.startsWith('/api/cron/')
