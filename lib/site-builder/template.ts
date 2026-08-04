@@ -16,6 +16,21 @@ export type Testimonial = { quote: string; location: string; source: string }
 export type Founder = { name: string; role: string; credentials: string | null }
 export type Stat = { value: string; label: string }
 
+// Per-client art direction. The model picks a palette from the copy brief, but
+// when a business has a real logo the site should look like their brand, not
+// like the last one off the line. Anything set here overrides the generated
+// design, so two roofers never arrive looking like the same page recoloured.
+export type SiteStyle = {
+  palette?: Partial<SiteDesign['palette']>
+  font?: { family: string; css: string; weight: string; italic: boolean }
+  radius?: string        // card/figure corners
+  buttonRadius?: string  // 100px reads friendly, 6px reads industrial
+  heroFlip?: boolean     // quote form on the left instead of the right
+  logoUrl?: string       // e.g. their logo re-cropped and inlined as a data URI
+  logoHeight?: string    // tall stacked logos need more than the 44px default
+  headerAlwaysSolid?: boolean // for logos that need a light background to read
+}
+
 export type TemplateInput = {
   businessName: string
   legalName: string
@@ -33,6 +48,7 @@ export type TemplateInput = {
   stats: Stat[]
   buildId: string
   design: SiteDesign
+  style?: SiteStyle
 }
 
 function esc(s: string): string {
@@ -61,8 +77,16 @@ function starRow(rating: number, size = 15): string {
 
 export function renderSiteHtml(input: TemplateInput): string {
   const { design } = input
-  const { primary, accent, ink, surface, surface_alt } = design.palette
-  const font = FONTS[design.niche_category] || FONTS.generic
+  const style = input.style || {}
+  const { primary, accent, ink, surface, surface_alt } = { ...design.palette, ...style.palette }
+  const font = style.font || FONTS[design.niche_category] || FONTS.generic
+  const radius = style.radius || '18px'
+  const logoUrl = style.logoUrl || input.logoUrl
+  // The model sometimes writes a phone-first CTA ("Call Chris Now"). That reads
+  // wrong on a button that scrolls to a form or submits one, so anything
+  // pointing at the form gets a form-shaped label instead.
+  const formCta = /\bcall\b/i.test(design.cta_text) ? 'Get My Free Quote' : design.cta_text
+  const btnRadius = style.buttonRadius || '100px'
   const phoneHref = input.phone ? `tel:${input.phone.replace(/[^\d+]/g, '')}` : null
   const hasRating = input.rating != null && input.reviewCount != null
   const name = input.businessName
@@ -193,8 +217,8 @@ export function renderSiteHtml(input: TemplateInput): string {
       </section>`
     : ''
 
-  const brandMark = input.logoUrl
-    ? `<span class="logo-chip"><img src="${esc(input.logoUrl)}" alt="${esc(name)}" class="logo-img" /></span>`
+  const brandMark = logoUrl
+    ? `<span class="logo-chip"><img src="${esc(logoUrl)}" alt="${esc(name)}" class="logo-img" /></span>`
     : `<span class="mark">${esc(input.monogram)}</span><span class="wordmark">${esc(name)}</span>`
 
   const jsonLd = JSON.stringify({
@@ -224,7 +248,7 @@ ${heroPhoto ? `<meta property="og:image" content="${esc(heroPhoto)}" />` : ''}
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=${font.css}&display=swap" rel="stylesheet">
 <script type="application/ld+json">${jsonLd}</script>
 <style>
-  :root{--primary:${primary};--accent:${accent};--ink:${ink};--surface:${surface};--alt:${surface_alt};--display:${font.family},serif;--r:18px}
+  :root{--primary:${primary};--accent:${accent};--ink:${ink};--surface:${surface};--alt:${surface_alt};--display:${font.family},serif;--r:${radius};--btn-r:${btnRadius}}
   *{box-sizing:border-box;margin:0;padding:0}
   html{scroll-behavior:smooth;overflow-x:hidden}
   body{font-family:'Inter',system-ui,sans-serif;background:var(--surface);color:var(--ink);-webkit-font-smoothing:antialiased;font-size:16px;line-height:1.6;overflow-x:hidden;max-width:100vw}
@@ -246,7 +270,7 @@ ${heroPhoto ? `<meta property="og:image" content="${esc(heroPhoto)}" />` : ''}
   .lede{font-size:17px;opacity:.7;max-width:560px}
 
   /* buttons */
-  .btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;border-radius:100px;padding:15px 28px;font-weight:600;font-size:15px;border:none;cursor:pointer;transition:transform .18s ease,box-shadow .18s ease,background .18s ease;font-family:inherit}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;border-radius:var(--btn-r);padding:15px 28px;font-weight:600;font-size:15px;border:none;cursor:pointer;transition:transform .18s ease,box-shadow .18s ease,background .18s ease;font-family:inherit}
   .btn-accent{background:var(--accent);color:#fff;box-shadow:0 6px 20px color-mix(in srgb,var(--accent) 38%,transparent)}
   .btn-accent:hover{transform:translateY(-2px);box-shadow:0 12px 30px color-mix(in srgb,var(--accent) 46%,transparent)}
   .btn-ghost{background:rgba(255,255,255,.08);color:#fff;border:1px solid rgba(255,255,255,.28);backdrop-filter:blur(6px)}
@@ -261,18 +285,18 @@ ${heroPhoto ? `<meta property="og:image" content="${esc(heroPhoto)}" />` : ''}
   header.solid{background:rgba(255,255,255,.92);backdrop-filter:blur(14px);box-shadow:0 1px 0 rgba(0,0,0,.07);padding:11px 0}
   header .wrap{display:flex;align-items:center;justify-content:space-between;gap:16px}
   .brand{display:flex;align-items:center;gap:11px;min-width:0}
-  .mark{width:38px;height:38px;border-radius:11px;background:var(--accent);color:#fff;display:grid;place-items:center;font-family:var(--display);font-weight:${font.weight};font-size:17px;flex-shrink:0;letter-spacing:-.02em}
+  .mark{width:38px;height:38px;border-radius:calc(var(--r) - 7px);background:var(--accent);color:#fff;display:grid;place-items:center;font-family:var(--display);font-weight:${font.weight};font-size:17px;flex-shrink:0;letter-spacing:-.02em}
   .wordmark{font-family:var(--display);font-weight:${font.weight};font-size:19px;letter-spacing:-.025em;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   header.solid .wordmark{color:var(--ink)}
   /* Real logos often ship with a background baked in, so they get a neutral
      chip that reads on both the transparent-over-hero and solid header. */
-  .logo-chip{background:#fff;border-radius:12px;padding:7px 12px;display:flex;align-items:center;box-shadow:0 2px 12px rgba(0,0,0,.14)}
-  .logo-img{height:44px;width:auto;max-width:230px;object-fit:contain;display:block}
+  .logo-chip{background:#fff;border-radius:calc(var(--r) - 6px);padding:7px 12px;display:flex;align-items:center;box-shadow:0 2px 12px rgba(0,0,0,.14)}
+  .logo-img{height:${style.logoHeight || '44px'};width:auto;max-width:230px;object-fit:contain;display:block}
   .hdr-r{display:flex;align-items:center;gap:12px;flex-shrink:0}
   /* Phone in the header is the single highest-converting element for local
      trades (calls convert ~46% vs ~2% for forms), so it stays, but styled as
      a deliberate pill rather than a bare text link. */
-  .hdr-tel{display:inline-flex;align-items:center;gap:8px;font-weight:600;font-size:14.5px;color:#fff;padding:9px 16px;border-radius:100px;border:1px solid rgba(255,255,255,.3);transition:background .2s}
+  .hdr-tel{display:inline-flex;align-items:center;gap:8px;font-weight:600;font-size:14.5px;color:#fff;padding:9px 16px;border-radius:var(--btn-r);border:1px solid rgba(255,255,255,.3);transition:background .2s}
   .hdr-tel:hover{background:rgba(255,255,255,.14)}
   header.solid .hdr-tel{color:var(--ink);border-color:rgba(0,0,0,.16)}
   header.solid .hdr-tel:hover{background:rgba(0,0,0,.05)}
@@ -293,19 +317,19 @@ ${heroPhoto ? `<meta property="og:image" content="${esc(heroPhoto)}" />` : ''}
   .hero-l .h1{color:#fff;margin-bottom:20px}
   .hero-sub{font-size:clamp(15.5px,1.6vw,18.5px);opacity:.82;max-width:520px;margin-bottom:30px}
   .hero-pts{display:flex;flex-wrap:wrap;gap:9px;margin-bottom:34px}
-  .hero-pts span{display:inline-flex;align-items:center;gap:7px;font-size:13.5px;font-weight:500;color:rgba(255,255,255,.9);background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);padding:8px 15px;border-radius:100px;backdrop-filter:blur(6px)}
+  .hero-pts span{display:inline-flex;align-items:center;gap:7px;font-size:13.5px;font-weight:500;color:rgba(255,255,255,.9);background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);padding:8px 15px;border-radius:var(--btn-r);backdrop-filter:blur(6px)}
   .hero-pts svg{color:var(--accent)}
   .hero-ctas{display:flex;gap:12px;flex-wrap:wrap}
   .rate{display:inline-flex;align-items:center;gap:9px;margin-bottom:18px;font-size:13.5px;font-weight:600;color:#fff}
   .rate .stars{color:var(--accent);display:inline-flex;gap:1px}
 
   /* hero form card */
-  .fcard{background:#fff;border-radius:24px;padding:30px;box-shadow:0 30px 70px rgba(0,0,0,.32);max-width:430px;justify-self:end;width:100%}
+  .fcard{background:#fff;border-radius:calc(var(--r) + 6px);padding:30px;box-shadow:0 30px 70px rgba(0,0,0,.32);max-width:430px;justify-self:end;width:100%}
   .fcard h3{font-family:var(--display);font-weight:${font.weight};font-size:24px;letter-spacing:-.025em;margin-bottom:5px;line-height:1.1}
   .fcard .fsub{font-size:13.5px;opacity:.6;margin-bottom:20px}
   .fld{margin-bottom:13px}
   .fld label{display:block;font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;opacity:.5;margin-bottom:6px}
-  .fld input,.fld select{width:100%;padding:13px 15px;border-radius:12px;border:1.5px solid rgba(0,0,0,.11);font-family:inherit;font-size:15px;background:#fff;color:var(--ink);transition:border-color .18s,box-shadow .18s}
+  .fld input,.fld select{width:100%;padding:13px 15px;border-radius:calc(var(--r) - 6px);border:1.5px solid rgba(0,0,0,.11);font-family:inherit;font-size:15px;background:#fff;color:var(--ink);transition:border-color .18s,box-shadow .18s}
   .fld input:focus,.fld select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 15%,transparent)}
   .fcard .btn{width:100%;margin-top:6px}
   .fnote{font-size:11.5px;opacity:.5;text-align:center;margin-top:12px}
@@ -405,7 +429,7 @@ ${heroPhoto ? `<meta property="og:image" content="${esc(heroPhoto)}" />` : ''}
 
   /* Sits bottom-left: a top-right corner ribbon always collided with the
      header CTA, which is the one button the prospect is meant to notice. */
-  .demo-tag{position:fixed;left:18px;bottom:18px;z-index:70;display:inline-flex;align-items:center;gap:7px;background:rgba(20,20,20,.82);color:#fff;backdrop-filter:blur(8px);font-size:11px;font-weight:600;letter-spacing:.09em;padding:8px 14px;border-radius:100px;border:1px solid rgba(255,255,255,.16)}
+  .demo-tag{position:fixed;left:18px;bottom:18px;z-index:70;display:inline-flex;align-items:center;gap:7px;background:rgba(20,20,20,.82);color:#fff;backdrop-filter:blur(8px);font-size:11px;font-weight:600;letter-spacing:.09em;padding:8px 14px;border-radius:var(--btn-r);border:1px solid rgba(255,255,255,.16)}
   .demo-tag::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--accent)}
   .sticky-m{display:none}
 
@@ -440,6 +464,27 @@ ${heroPhoto ? `<meta property="og:image" content="${esc(heroPhoto)}" />` : ''}
     .sticky-m .c{background:var(--ink);color:#fff}
     .sticky-m .q{background:var(--accent);color:#fff}
   }
+
+  /* per-client art direction overrides, last so they always win */
+  ${style.heroFlip ? `
+  /* Scoped to desktop: these rules sit after the responsive block, so an
+     unscoped two-column rule here would override the mobile collapse and
+     push the hero off the side of the screen. */
+  @media (min-width:961px){
+    .hero .wrap{grid-template-columns:.95fr 1.05fr}
+    .hero-l{order:2}
+    .fcard{order:1;justify-self:start}
+  }
+  .hero-veil{background:linear-gradient(255deg,color-mix(in srgb,var(--primary) 93%,transparent) 0%,color-mix(in srgb,var(--primary) 78%,transparent) 46%,color-mix(in srgb,var(--primary) 55%,transparent) 100%)}
+  .hero-glow{right:auto;left:-120px}
+  /* On mobile the columns collapse, and the pitch has to come before the form. */
+  @media (max-width:960px){.hero-l{order:1}.fcard{order:2}}` : ''}
+  ${style.headerAlwaysSolid ? `
+  header{background:rgba(255,255,255,.94);backdrop-filter:blur(14px);box-shadow:0 1px 0 rgba(0,0,0,.08)}
+  .wordmark,.hdr-tel{color:var(--ink)}
+  .hdr-tel{border-color:rgba(0,0,0,.16)}
+  .hdr-tel:hover{background:rgba(0,0,0,.05)}
+  .logo-chip{box-shadow:none;padding:0;background:transparent}` : ''}
 </style>
 </head>
 <body>
@@ -456,7 +501,7 @@ ${design.emergency_strip.enabled ? `<div class="emg">${esc(design.emergency_stri
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
         <span>${esc(input.phone!)}</span>
       </a>` : ''}
-      <a href="#quote" class="btn btn-accent">${esc(design.cta_text)}</a>
+      <a href="#quote" class="btn btn-accent">${esc(formCta)}</a>
     </div>
   </div>
 </header>
@@ -477,8 +522,8 @@ ${design.emergency_strip.enabled ? `<div class="emg">${esc(design.emergency_stri
         ${design.hero_points.map(p => `<span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg>${esc(p)}</span>`).join('')}
       </div>
       <div class="hero-ctas">
-        ${phoneHref ? `<a href="${phoneHref}" class="btn btn-accent">Call ${esc(input.phone!)}</a>` : `<a href="#quote" class="btn btn-accent">${esc(design.cta_text)}</a>`}
-        <a href="#quote" class="btn btn-ghost">${esc(design.cta_text)}</a>
+        ${phoneHref ? `<a href="${phoneHref}" class="btn btn-accent">Call ${esc(input.phone!)}</a>` : `<a href="#quote" class="btn btn-accent">${esc(formCta)}</a>`}
+        <a href="#quote" class="btn btn-ghost">${esc(formCta)}</a>
       </div>
     </div>
 
@@ -491,7 +536,7 @@ ${design.emergency_strip.enabled ? `<div class="emg">${esc(design.emergency_stri
         <div class="fld"><label>Phone</label><input type="tel" name="phone" required autocomplete="tel" /></div>
         <div class="fld"><label>Postcode</label><input type="text" name="postcode" autocomplete="postal-code" /></div>
         <div class="fld"><label>What do you need?</label><select name="job_type">${jobTypes}</select></div>
-        <button type="submit" class="btn btn-accent">${esc(design.cta_text)}</button>
+        <button type="submit" class="btn btn-accent">${esc(formCta)}</button>
         <p class="fnote">We never share your details.</p>
       </form>
       <div class="fdone" id="lead-done">
@@ -543,7 +588,7 @@ ${faqHtml}
     <p>${phoneHref ? `Call ${esc(input.phone!)} or send your details over.` : 'Send your details over and we will come back to you.'}</p>
     <div class="cta-btns">
       ${phoneHref ? `<a href="${phoneHref}" class="btn btn-accent">Call ${esc(input.phone!)}</a>` : ''}
-      <a href="#quote" class="btn btn-ghost">${esc(design.cta_text)}</a>
+      <a href="#quote" class="btn btn-ghost">${esc(formCta)}</a>
     </div>
   </div>
 </section>
@@ -557,7 +602,7 @@ ${faqHtml}
 
 ${phoneHref ? `<div class="sticky-m">
   <a href="${phoneHref}" class="c"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>Call now</a>
-  <a href="#quote" class="q">${esc(design.cta_text)}</a>
+  <a href="#quote" class="q">${esc(formCta)}</a>
 </div>` : ''}
 
 <script>

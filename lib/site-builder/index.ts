@@ -1,12 +1,13 @@
 import { researchBusiness, type BusinessResearch } from './research'
 import { generateSiteDesign, type SiteDesign } from './design'
-import { renderSiteHtml, type Stat } from './template'
+import { renderSiteHtml, type Stat, type SiteStyle } from './template'
 import { deployStaticSite } from './deploy'
 import { assessBuildQuality, type QualityCheck } from './quality'
 
 export type { SiteDesign } from './design'
 export type { BusinessResearch } from './research'
 export type { QualityCheck } from './quality'
+export type { SiteStyle } from './template'
 
 export type BuildSiteInput = {
   businessName: string
@@ -20,6 +21,10 @@ export type BuildSiteInput = {
   googleUrl: string | null
   existingSiteUrl: string | null
   buildId: string
+  // Optional per-client art direction (brand palette lifted from their real
+  // logo, different display face, squarer or rounder furniture). Left unset,
+  // the model's generated palette and the per-niche font are used.
+  style?: SiteStyle
   // Present only when this is a re-build off caller feedback on an existing
   // build. When previousResearch is available it's reused (no repeat Apify
   // cost); when null (older rows with nothing saved) research re-runs, so an
@@ -144,6 +149,7 @@ export async function buildAndDeploySite(input: BuildSiteInput): Promise<BuildSi
     stats: buildStats(research, design),
     buildId: input.buildId,
     design,
+    style: input.style,
   })
 
   const slug = slugify(input.businessName, input.buildId)
